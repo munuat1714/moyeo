@@ -10,7 +10,9 @@ await writeFile(
 
 export default {
   fetch(request, env, context) {
-    return handler(request, env, context)
+    return typeof handler === 'function'
+      ? handler(request, env, context)
+      : handler.fetch(request, env, context)
   },
 }
 `,
