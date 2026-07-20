@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
@@ -23,7 +25,7 @@ function loadState(): AppState {
   }
 }
 
-function App() {
+export function App() {
   const [state, setState] = useState<AppState>(loadState)
   const [selectedCourse, setSelectedCourse] = useState<Course>(courses[0])
   const [finalTab, setFinalTab] = useState<'schedule' | 'map' | 'booking'>('schedule')
@@ -335,4 +337,7 @@ function Avatar({ member, compact }: { member: AppState['members'][number]; comp
   return <span className={`avatar ${compact ? 'compact' : ''}`} style={{ background: member.color }}><UserRound size={compact ? 14 : 19} />{member.host && !compact && <i>★</i>}</span>
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>)
+if (typeof document !== 'undefined') {
+  const root = document.getElementById('root')
+  if (root) createRoot(root).render(<React.StrictMode><App /></React.StrictMode>)
+}
