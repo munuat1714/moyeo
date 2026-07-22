@@ -45,7 +45,7 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${state.step === 'home' ? 'landing-mode' : ''}`}>
       <header className="app-header">
         {state.step !== 'home' ? (
           <button className="icon-button" aria-label="뒤로 가기" onClick={() => update({ step: headerBack[state.step] ?? 'home' })}>
@@ -53,7 +53,9 @@ export function App() {
           </button>
         ) : <div className="brand-mark">ㅁ</div>}
         <div className="header-title">{state.step === 'home' ? '모두의 여행' : stepTitle[state.step]}</div>
-        <button className="icon-button subtle" aria-label="처음부터 다시 시작" onClick={reset}><RotateCcw size={18} /></button>
+        {state.step === 'home'
+          ? <button className="header-demo-button" onClick={() => update({ step: 'room' })}>데모 체험</button>
+          : <button className="icon-button subtle" aria-label="처음부터 다시 시작" onClick={reset}><RotateCcw size={18} /></button>}
       </header>
 
       <main>
@@ -77,26 +79,60 @@ const stepTitle: Record<AppState['step'], string> = {
 
 function HomeScreen({ onStart, onDemo }: { onStart: () => void; onDemo: () => void }) {
   return (
-    <section className="home-screen">
-      <div className="hero-copy">
-        <span className="eyebrow"><Sparkles size={14} /> 친구 취향으로 완성하는 여행</span>
-        <h1>우리 모두 좋은<br /><em>1박 2일</em>을 만들어요.</h1>
-        <p>친구들의 취향을 모으면 교통부터 카페, 맛집, 숙소까지 딱 맞는 코스를 찾아드려요.</p>
-      </div>
-      <div className="route-illustration" aria-label="부산에서 경주로 향하는 여행 지도">
-        <div className="map-grid" />
-        <span className="map-label busan">부산</span>
-        <span className="map-label gyeongju">경주</span>
-        <div className="route-line" />
-        <div className="route-dot start" />
-        <div className="route-dot end"><MapPin size={19} fill="currentColor" /></div>
-        <span className="route-chip"><TrainFront size={14} /> 55분</span>
-      </div>
-      <div className="home-actions">
-        <button className="primary-button" onClick={onStart}>새 여행 만들기 <ArrowRight size={19} /></button>
-        <button className="text-button" onClick={onDemo}>경주 데모 둘러보기 <ChevronRight size={17} /></button>
-      </div>
-    </section>
+    <div className="landing-page">
+      <section className="landing-hero">
+        <div className="landing-copy">
+          <span className="eyebrow"><Sparkles size={14} /> 친구 취향으로 완성하는 여행</span>
+          <h1>단체 채팅은 그만.<br /><em>모두 좋은 여행</em>을<br />한 번에 골라요.</h1>
+          <p>각자 취향을 고르면 모두가 좋아할 1박 2일 코스를 비교해 드려요. 마지막 선택은 공정한 투표로 끝내세요.</p>
+          <div className="landing-actions">
+            <button className="primary-button" onClick={onDemo}>90초 데모 체험 <ArrowRight size={19} /></button>
+            <button className="outline-button" onClick={onStart}>내 여행 만들어보기</button>
+          </div>
+          <div className="landing-proof"><span><Check size={14} /> 회원가입 없이</span><span><Check size={14} /> 무료 체험</span><span><Check size={14} /> 모바일 최적화</span></div>
+        </div>
+        <div className="product-preview" aria-label="모두의 여행 서비스 미리보기">
+          <div className="preview-glow" />
+          <div className="preview-phone">
+            <div className="preview-top"><span className="brand-mark">ㅁ</span><b>우리 취향 분석</b><Sparkles size={18} /></div>
+            <div className="preview-route"><small>부산에서 경주까지</small><strong>우리 넷의 취향을<br />모두 담았어요</strong><div><span>맛집 4명</span><span>감성 카페 3명</span><span>사진 3명</span></div></div>
+            <div className="preview-course"><span>🏆</span><div><small>취향 일치 92%</small><b>맛집과 감성 산책 코스</b><p>황리단길 · 대릉원 · 동궁과 월지</p></div></div>
+            <div className="preview-votes"><span>민지</span><span>서준</span><span>유나</span><span>현우</span><b>4명 투표 완료</b></div>
+          </div>
+          <div className="floating-card card-one"><Vote size={17} /><span><b>공정한 투표</b><small>모두의 선택으로 확정</small></span></div>
+          <div className="floating-card card-two"><MapPin size={17} /><span><b>동선까지 한눈에</b><small>1박 2일 일정 완성</small></span></div>
+        </div>
+      </section>
+
+      <section className="problem-strip" aria-label="여행 계획의 어려움">
+        <p>맛집 링크는 쌓이고, 의견은 갈리고, 일정은 아무도 못 짜는 여행 계획</p>
+        <strong>모두의 여행이 취향 수집부터 최종 선택까지 이어드려요.</strong>
+      </section>
+
+      <section className="landing-section how-it-works">
+        <div className="landing-heading"><span>HOW IT WORKS</span><h2>세 단계면 여행 계획 끝</h2><p>조사하고 설득하는 시간 대신, 함께 고르는 즐거움만 남겼어요.</p></div>
+        <div className="step-cards">
+          <article><i>01</i><span className="step-icon"><UsersRound /></span><h3>각자 취향 선택</h3><p>맛집, 카페, 사진, 역사처럼 원하는 여행 스타일을 친구마다 고릅니다.</p></article>
+          <article><i>02</i><span className="step-icon"><Sparkles /></span><h3>맞춤 코스 비교</h3><p>공통 취향 60%와 서로 다른 취향 40%를 반영한 세 가지 코스를 봅니다.</p></article>
+          <article><i>03</i><span className="step-icon"><Vote /></span><h3>투표로 최종 확정</h3><p>비공개 투표와 결선투표로 모두가 납득할 최종 일정을 결정합니다.</p></article>
+        </div>
+      </section>
+
+      <section className="landing-section feature-band">
+        <div className="feature-copy"><span className="eyebrow"><Map size={14} /> 계획은 구체적으로</span><h2>추천에서 끝나지 않고<br />진짜 일정처럼 보여줘요.</h2><p>예상 가격과 이동시간, 날짜별 시간표, 지도형 동선과 예약 필요 항목까지 한 화면에서 확인합니다.</p><button className="text-link" onClick={onDemo}>실제 경주 코스 보기 <ArrowRight size={17} /></button></div>
+        <div className="feature-grid"><div><Clock3 /><b>시간표</b><span>날짜별 상세 일정</span></div><div><MapPin /><b>이동 동선</b><span>장소 순서와 이동시간</span></div><div><WalletCards /><b>예상 비용</b><span>코스별 가격 비교</span></div><div><Vote /><b>비공개 투표</b><span>눈치 보지 않는 선택</span></div></div>
+      </section>
+
+      <section className="landing-cta">
+        <span className="eyebrow dark"><Sparkles size={14} /> 경주 1박 2일 MVP</span>
+        <h2>다음 여행은<br />결정부터 가볍게.</h2>
+        <p>친구 네 명의 취향이 어떻게 하나의 코스가 되는지 직접 확인해 보세요.</p>
+        <button className="primary-button light" onClick={onDemo}>무료 데모 시작하기 <ArrowRight size={19} /></button>
+        <small>현재는 사용자 흐름 검증용 프로토타입이며 실제 예약·결제는 제공하지 않습니다.</small>
+      </section>
+
+      <footer className="landing-footer"><div><span className="brand-mark">ㅁ</span><b>모두의 여행</b></div><p>친구들의 취향을 모아 완성하는 여행 큐레이션 MVP</p><small>© 2026 모두의 여행 팀</small></footer>
+    </div>
   )
 }
 
