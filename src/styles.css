@@ -123,6 +123,22 @@ input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,79,.
 .count-badge { color: var(--green); background: var(--green-soft); font-size: 10px; padding: 4px 8px; border-radius: 10px; font-weight: 800; }
 .booking-list { display: grid; gap: 10px; }.booking-list > div { display: grid; grid-template-columns: 42px 1fr auto; gap: 10px; align-items: center; padding: 13px; border-radius: 15px; background: white; border: 1px solid var(--line); }.booking-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--green-soft); color: var(--green); }.booking-icon svg { width: 18px; }.booking-list > div > div { display: grid; gap: 2px; }.booking-list small, .booking-list span { color: var(--muted); font-size: 9px; }.booking-list b { font-size: 12px; }.booking-list button { background: var(--ink); color: white; border-radius: 9px; padding: 8px; font-size: 9px; font-weight: 700; }.booking-list .booked { color: var(--green); background: var(--green-soft); padding: 7px; border-radius: 9px; display: flex; align-items: center; gap: 3px; font-weight: 700; }.booking-notice { margin-top: 14px; text-align: center; color: var(--muted); font-size: 9px; }
 
+.copy-plan { margin: 8px 0 22px; background: white; }
+.stop-tools { display: flex; align-items: center; gap: 7px; }
+.stop-tools button { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: var(--muted); background: #f2f4f0; }
+.stop-tools button:hover { color: #b43e2c; background: var(--coral-soft); }
+.empty-schedule { min-height: 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1px dashed var(--line); border-radius: 18px; color: var(--muted); text-align: center; }
+.empty-schedule b { color: var(--ink); }.empty-schedule span { max-width: 260px; font-size: 11px; line-height: 1.5; }
+.validation-panel { padding: 4px 20px 34px; display: grid; gap: 14px; }
+.feedback-card, .interest-card { border: 1px solid var(--line); border-radius: 20px; background: white; padding: 20px; }
+.feedback-card > span { color: var(--green); font-size: 10px; font-weight: 800; }.feedback-card h3, .interest-card h3 { margin: 7px 0 14px; font-size: 17px; line-height: 1.4; }
+.feedback-card > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }.feedback-card button { min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); border-radius: 12px; background: #f8faf7; color: var(--muted); font-size: 11px; font-weight: 700; }
+.feedback-card button.selected { color: var(--green); border-color: var(--green); background: var(--green-soft); }.feedback-card p { display: flex; align-items: center; gap: 5px; margin: 12px 0 0; color: var(--green); font-size: 10px; }
+.interest-card { color: white; border: 0; background: var(--ink); }.interest-card .eyebrow { color: #9ac7ff; }.interest-card h3 { margin-top: 14px; font-size: 21px; }.interest-card > p { margin: -5px 0 16px; color: #b9c4d1; font-size: 11px; line-height: 1.6; }
+.interest-actions { display: grid; gap: 8px; }.interest-actions button { min-height: 45px; display: flex; align-items: center; justify-content: center; gap: 7px; border-radius: 12px; background: white; color: var(--ink); font-size: 11px; font-weight: 800; }.interest-actions button:last-child { color: white; border: 1px solid #ffffff38; background: #ffffff12; }
+.interest-confirm { display: flex; align-items: flex-start; gap: 7px; margin-top: 12px; padding: 10px; border-radius: 10px; color: #d9f5e9; background: #ffffff10; font-size: 10px; line-height: 1.5; }.interest-confirm svg { flex: none; }
+.interest-card > small { display: flex; align-items: center; gap: 5px; margin-top: 15px; color: #92a0b1; font-size: 9px; }
+
 .landing-mode { width: 100%; max-width: none; background: #fff; box-shadow: none; }
 .landing-mode .app-header { max-width: 1180px; margin: 0 auto; background: rgba(255,255,255,.9); }
 .landing-mode main { background: #fff; }

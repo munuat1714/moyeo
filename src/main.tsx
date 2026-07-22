@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, ChevronRight, CircleDollarSign,
-  Clock3, Coffee, Compass, Home, Map, MapPin, RotateCcw, Sparkles, TrainFront,
+  Clock3, Coffee, Compass, Copy, ExternalLink, Home, Map, MapPin, MessageCircle,
+  RotateCcw, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, TrainFront, Trash2,
   UserRound, UsersRound, Utensils, Vote, WalletCards, X,
 } from 'lucide-react'
 import { courses, demoPreferences, foods, initialState, moods, paces, themes } from './data'
@@ -13,6 +14,18 @@ import type { AppState, Course, Preference, Stop } from './types'
 import './styles.css'
 
 const STORAGE_KEY = 'modu-trip-state-v1'
+const EVENT_KEY = 'modu-trip-anonymous-events-v1'
+
+type AnonymousEvent = { name: string; at: string }
+
+function track(name: string) {
+  try {
+    const events = JSON.parse(localStorage.getItem(EVENT_KEY) ?? '[]') as AnonymousEvent[]
+    localStorage.setItem(EVENT_KEY, JSON.stringify([...events.slice(-49), { name, at: new Date().toISOString() }]))
+  } catch {
+    // 체험은 분석 기록에 실패해도 계속 진행됩니다.
+  }
+}
 
 function loadState(): AppState {
   try {
@@ -31,6 +44,7 @@ export function App() {
   const [finalTab, setFinalTab] = useState<'schedule' | 'map' | 'booking'>('schedule')
 
   useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)), [state])
+  useEffect(() => { track('landing_view') }, [])
 
   const update = (patch: Partial<AppState>) => setState((current) => ({ ...current, ...patch }))
   const reset = () => {
@@ -59,7 +73,7 @@ export function App() {
       </header>
 
       <main>
-        {state.step === 'home' && <HomeScreen onStart={() => update({ step: 'create' })} onDemo={() => update({ step: 'room' })} />}
+        {state.step === 'home' && <HomeScreen onStart={() => { track('trip_start'); update({ step: 'create' }) }} onDemo={() => { track('demo_start'); update({ step: 'room' }) }} />}
         {state.step === 'create' && <CreateTrip state={state} setState={setState} />}
         {state.step === 'room' && <Room state={state} setState={setState} />}
         {state.step === 'preferences' && <Preferences state={state} setState={setState} />}
@@ -327,8 +341,40 @@ function Voting({ state, setState }: { state: AppState; setState: React.Dispatch
 function FinalTrip({ state, setState, tab, setTab }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>>; tab: 'schedule' | 'map' | 'booking'; setTab: (t: 'schedule' | 'map' | 'booking') => void }) {
   const course = courses.find((c) => c.id === state.finalCourseId) ?? courses[0]
   const [day, setDay] = useState(0)
+  const [schedule, setSchedule] = useState<Stop[][]>(() => course.days.map((items) => [...items]))
+  const [copied, setCopied] = useState(false)
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null)
+  const [interest, setInterest] = useState<'beta' | 'interview' | null>(null)
   const reservable = course.days.flat().filter((stop) => stop.reservable)
   const book = (title: string) => setState((s) => ({ ...s, booked: s.booked.includes(title) ? s.booked : [...s.booked, title] }))
+  const removeStop = (index: number) => {
+    setSchedule((current) => current.map((items, dayIndex) => dayIndex === day ? items.filter((_, stopIndex) => stopIndex !== index) : items))
+    track('schedule_edit')
+  }
+  const copyPlan = async () => {
+    const text = schedule.map((items, dayIndex) => [
+      `DAY ${dayIndex + 1}`,
+      ...items.map((stop) => `${stop.time} ${stop.title} · ${stop.duration}`),
+    ].join('\n')).join('\n\n')
+    try {
+      await navigator.clipboard.writeText(`${state.trip.name}\n${state.trip.origin} → ${state.trip.destination}\n\n${text}`)
+      setCopied(true)
+      track('schedule_copy')
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      window.prompt('아래 일정을 복사해 주세요.', text)
+    }
+  }
+  const answerFeedback = (value: 'up' | 'down') => {
+    setFeedback(value)
+    localStorage.setItem('modu-trip-feedback-v1', value)
+    track(value === 'up' ? 'feedback_helpful' : 'feedback_not_helpful')
+  }
+  const chooseInterest = (value: 'beta' | 'interview') => {
+    setInterest(value)
+    localStorage.setItem('modu-trip-interest-v1', value)
+    track(value === 'beta' ? 'beta_interest' : 'interview_interest')
+  }
   return (
     <section className="final-page">
       <div className="final-hero">
@@ -342,15 +388,30 @@ function FinalTrip({ state, setState, tab, setTab }: { state: AppState; setState
         <button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}><Map size={17} />동선</button>
         <button className={tab === 'booking' ? 'active' : ''} onClick={() => setTab('booking')}><WalletCards size={17} />예약</button>
       </div>
-      {tab === 'schedule' && <div className="final-content"><div className="day-switch"><button className={day === 0 ? 'active' : ''} onClick={() => setDay(0)}>DAY 1 <small>8.15 토</small></button><button className={day === 1 ? 'active' : ''} onClick={() => setDay(1)}>DAY 2 <small>8.16 일</small></button></div><Timeline stops={course.days[day]} /></div>}
-      {tab === 'map' && <div className="final-content"><RouteMap stops={course.days[day]} /><div className="map-summary"><b>DAY {day + 1} 이동 요약</b><span><TrainFront size={15} /> 총 {day === 0 ? 72 : 46}분 · {course.days[day].length}개 장소</span></div></div>}
+      {tab === 'schedule' && <div className="final-content"><div className="day-switch"><button className={day === 0 ? 'active' : ''} onClick={() => setDay(0)}>DAY 1 <small>8.15 토</small></button><button className={day === 1 ? 'active' : ''} onClick={() => setDay(1)}>DAY 2 <small>8.16 일</small></button></div><Timeline stops={schedule[day]} onRemove={removeStop} /><button className="outline-button copy-plan" onClick={copyPlan}>{copied ? <Check size={17} /> : <Copy size={17} />}{copied ? '일정을 복사했어요' : '전체 일정 복사하기'}</button></div>}
+      {tab === 'map' && <div className="final-content"><RouteMap stops={schedule[day]} /><div className="map-summary"><b>DAY {day + 1} 이동 요약</b><span><TrainFront size={15} /> 총 {day === 0 ? 72 : 46}분 · {schedule[day].length}개 장소</span></div></div>}
       {tab === 'booking' && <div className="final-content"><div className="section-title-row"><h3>예약이 필요한 항목</h3><span className="count-badge">{state.booked.length}/{reservable.length}</span></div><div className="booking-list">{reservable.map((stop) => <div key={stop.title}><span className="booking-icon">{stop.category === '교통' ? <TrainFront /> : stop.category === '숙소' ? <Home /> : <Compass />}</span><div><small>{stop.category} · {stop.time}</small><b>{stop.title}</b><span>{formatPrice(stop.price)}</span></div>{state.booked.includes(stop.title) ? <span className="booked"><Check size={14} /> 완료</span> : <button onClick={() => book(stop.title)}>예약 연결</button>}</div>)}</div><div className="booking-notice">실제 결제는 진행되지 않는 MVP 시뮬레이션입니다.</div></div>}
+      <div className="validation-panel">
+        <section className="feedback-card">
+          <span>30초만 도와주세요</span><h3>이 일정이 실제 여행 계획에 도움이 됐나요?</h3>
+          <div><button className={feedback === 'up' ? 'selected' : ''} onClick={() => answerFeedback('up')}><ThumbsUp size={18} /> 도움 됐어요</button><button className={feedback === 'down' ? 'selected' : ''} onClick={() => answerFeedback('down')}><ThumbsDown size={18} /> 아쉬워요</button></div>
+          {feedback && <p><Check size={14} /> 답변이 이 기기에 익명으로 저장됐어요.</p>}
+        </section>
+        <section className="interest-card">
+          <span className="eyebrow dark"><Sparkles size={14} /> 다음 단계에 함께해요</span>
+          <h3>모두의 여행을 더 먼저 만나보세요.</h3><p>연락처를 받지 않고 관심 의사만 확인합니다. 정식 모집 링크가 준비되면 이 화면에 연결할 예정이에요.</p>
+          <div className="interest-actions"><button onClick={() => chooseInterest('beta')}><ExternalLink size={17} /> 베타 참여에 관심 있어요</button><button onClick={() => chooseInterest('interview')}><MessageCircle size={17} /> 15분 인터뷰에 관심 있어요</button></div>
+          {interest && <div className="interest-confirm"><Check size={16} /><span>{interest === 'beta' ? '베타 참여' : '인터뷰 참여'} 관심을 표시했어요. 개인정보는 전송되지 않았습니다.</span></div>}
+          <small><ShieldCheck size={14} /> 여행 정보와 응답은 현재 사용 중인 브라우저에만 저장됩니다.</small>
+        </section>
+      </div>
     </section>
   )
 }
 
-function Timeline({ stops }: { stops: Stop[] }) {
-  return <div className="timeline">{stops.map((stop, index) => <div className="timeline-stop" key={stop.time + stop.title}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className="stop-card"><div><small>{stop.category} · {stop.duration}</small>{stop.shared && <em>공통</em>}</div><b>{stop.title}</b><p>{stop.description}</p><span>{stop.price === 0 ? '무료' : formatPrice(stop.price)}</span></div></div>)}</div>
+function Timeline({ stops, onRemove }: { stops: Stop[]; onRemove?: (index: number) => void }) {
+  if (stops.length === 0) return <div className="empty-schedule"><CalendarDays size={22} /><b>이 날짜의 일정이 비었어요.</b><span>처음부터 다시 시작하면 원래 추천 일정을 불러올 수 있어요.</span></div>
+  return <div className="timeline">{stops.map((stop, index) => <div className="timeline-stop" key={stop.time + stop.title}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className="stop-card"><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><b>{stop.title}</b><p>{stop.description}</p><span>{stop.price === 0 ? '무료' : formatPrice(stop.price)}</span></div></div>)}</div>
 }
 
 function RouteMap({ stops }: { stops: Stop[] }) {
