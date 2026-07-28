@@ -139,6 +139,22 @@ input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,79,.
 .interest-confirm { display: flex; align-items: flex-start; gap: 7px; margin-top: 12px; padding: 10px; border-radius: 10px; color: #d9f5e9; background: #ffffff10; font-size: 10px; line-height: 1.5; }.interest-confirm svg { flex: none; }
 .interest-card > small { display: flex; align-items: center; gap: 5px; margin-top: 15px; color: #92a0b1; font-size: 9px; }
 
+.simple-landing { min-height: calc(100vh - 64px); background: #fff; }
+.simple-hero { max-width: 980px; margin: 0 auto; padding: 96px 40px 70px; text-align: center; }
+.simple-hero .eyebrow { justify-content: center; }
+.simple-hero h1 { margin: 22px 0 20px; color: var(--ink); font-size: clamp(46px, 6vw, 72px); line-height: 1.08; letter-spacing: -4px; }
+.simple-hero h1 em { color: var(--green); font-style: normal; }
+.simple-hero > p { max-width: 650px; margin: 0 auto; color: var(--muted); font-size: 18px; line-height: 1.8; word-break: keep-all; }
+.concept-flow { margin: 54px auto 0; display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 16px; }
+.concept-flow article { min-height: 150px; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; border: 1px solid var(--line); border-radius: 22px; background: #f8fafc; }
+.concept-flow article > span { width: 48px; height: 48px; display: grid; place-items: center; color: var(--green); border-radius: 15px; background: var(--green-soft); }
+.concept-flow article > div { display: grid; gap: 7px; }.concept-flow b { font-size: 17px; }.concept-flow small { color: var(--muted); font-size: 11px; line-height: 1.45; }.concept-flow > i { color: #a6b0bd; }
+.interest-survey { max-width: 900px; margin: 0 auto 80px; padding: 52px; color: white; border-radius: 32px; background: var(--ink); text-align: center; }
+.interest-survey > div:first-child > span { color: #7bb5ff; font-size: 11px; font-weight: 900; letter-spacing: .8px; }.interest-survey h2 { margin: 12px 0 9px; font-size: 31px; letter-spacing: -1.4px; }.interest-survey p { margin: 0; color: #aab5c3; font-size: 12px; }
+.survey-actions { max-width: 610px; margin: 28px auto 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.survey-actions button { min-height: 54px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #ffffff2e; border-radius: 14px; color: #e8edf4; background: #ffffff0d; font-size: 13px; font-weight: 800; }.survey-actions button:first-child { color: var(--ink); background: white; }.survey-actions button.selected { color: white; border-color: #62a5ff; background: var(--green); box-shadow: 0 0 0 3px #3182f633; }
+.survey-thanks { max-width: 610px; margin: 14px auto 0; display: flex; align-items: center; justify-content: center; gap: 6px; color: #cde2ff; font-size: 11px; }
+.simple-footer { max-width: 980px; margin: 0 auto; padding: 30px 40px 42px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 24px; color: var(--muted); border-top: 1px solid var(--line); font-size: 11px; }.simple-footer > div { display: flex; align-items: center; gap: 9px; color: var(--ink); }.simple-footer p { margin: 0; }
+
 .landing-mode { width: 100%; max-width: none; background: #fff; box-shadow: none; }
 .landing-mode .app-header { max-width: 1180px; margin: 0 auto; background: rgba(255,255,255,.9); }
 .landing-mode main { background: #fff; }
@@ -168,6 +184,10 @@ input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,79,.
 
 @media (max-width: 800px) {
   .landing-mode .app-header { margin: 0; }
+  .simple-hero { padding: 58px 22px 48px; }.simple-hero h1 { font-size: 43px; letter-spacing: -2.7px; }.simple-hero > p { font-size: 15px; }
+  .concept-flow { margin-top: 38px; grid-template-columns: 1fr; gap: 9px; }.concept-flow > i { transform: rotate(90deg); }.concept-flow article { min-height: 118px; flex-direction: row; justify-content: flex-start; text-align: left; }.concept-flow article > div { flex: 1; }
+  .interest-survey { margin: 0 16px 56px; padding: 38px 20px; border-radius: 25px; }.interest-survey h2 { font-size: 25px; }.survey-actions { grid-template-columns: 1fr; }
+  .simple-footer { padding: 28px 22px; grid-template-columns: 1fr; gap: 9px; }
   .landing-hero { min-height: auto; padding: 52px 22px 64px; grid-template-columns: 1fr; gap: 36px; }
   .landing-copy h1 { font-size: 44px; letter-spacing: -2.7px; }.landing-copy > p { font-size: 15px; }
   .product-preview { min-height: 510px; }.preview-phone { width: 292px; min-height: 490px; }.floating-card.card-one { right: 0; }.floating-card.card-two { left: 0; }
