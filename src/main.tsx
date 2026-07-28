@@ -38,8 +38,12 @@ function loadState(): AppState {
   }
 }
 
-export function App() {
-  const [state, setState] = useState<AppState>(loadState)
+export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
+  const isDemo = mode === 'demo'
+  const [state, setState] = useState<AppState>(() => ({
+    ...loadState(),
+    step: isDemo ? 'room' : 'home',
+  }))
   const [selectedCourse, setSelectedCourse] = useState<Course>(courses[0])
   const [finalTab, setFinalTab] = useState<'schedule' | 'map' | 'booking'>('schedule')
 
@@ -49,7 +53,7 @@ export function App() {
   const update = (patch: Partial<AppState>) => setState((current) => ({ ...current, ...patch }))
   const reset = () => {
     localStorage.removeItem(STORAGE_KEY)
-    setState(initialState)
+    setState({ ...initialState, step: isDemo ? 'room' : 'home' })
     setSelectedCourse(courses[0])
   }
 
@@ -67,7 +71,9 @@ export function App() {
           </button>
         ) : <div className="brand-mark">ㅁ</div>}
         <div className="header-title">{state.step === 'home' ? '모두의 여행' : stepTitle[state.step]}</div>
-        {state.step !== 'home' && <button className="icon-button subtle" aria-label="처음부터 다시 시작" onClick={reset}><RotateCcw size={18} /></button>}
+        {state.step !== 'home' && (isDemo
+          ? <a className="demo-home-link" href="/"><Home size={15} /> 랜딩</a>
+          : <button className="icon-button subtle" aria-label="처음부터 다시 시작" onClick={reset}><RotateCcw size={18} /></button>)}
       </header>
 
       <main>

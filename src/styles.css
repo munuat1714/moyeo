@@ -41,6 +41,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .icon-button:hover { background: #eef0e9; }
 .icon-button.subtle { color: #9ca198; }
 .header-demo-button { min-height: 36px; padding: 0 14px; border-radius: 11px; background: var(--green); color: white; font-size: 11px; font-weight: 800; }
+.demo-home-link { min-height: 36px; padding: 0 11px; border-radius: 11px; display: flex; align-items: center; gap: 5px; color: var(--green); background: var(--green-soft); font-size: 11px; font-weight: 800; text-decoration: none; }
 main { min-height: calc(100vh - 64px); }
 
 .page { padding: 20px 20px 108px; }

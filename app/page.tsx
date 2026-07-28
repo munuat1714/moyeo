@@ -2,4 +2,6 @@
 
 import { App } from '../src/main'
 
-export default App
+export default function LandingPage() {
+  return <App mode="landing" />
+}
