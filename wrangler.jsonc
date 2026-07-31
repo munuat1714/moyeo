@@ -14,5 +14,8 @@
   },
   "images": {
     "binding": "IMAGES"
+  },
+  "vars": {
+    "DATA_REGION": "BUSAN"
   }
 }

@@ -1,4 +1,4 @@
-import type { Member } from './types'
+import type { Course, Member } from './types'
 
 export function allPreferencesComplete(members: Member[]) {
   return members.length > 0 && members.every((member) => Boolean(member.preference))
@@ -28,4 +28,20 @@ export function tallyVotes(votes: Record<string, string>) {
 
 export function formatPrice(price: number) {
   return `${price.toLocaleString('ko-KR')}원`
+}
+
+export function recommendCourses(baseCourses: Course[], members: Member[]) {
+  const preferences = members.flatMap((member) => member.preference ? [member.preference] : [])
+  if (preferences.length === 0) return baseCourses
+  return baseCourses.map((course) => {
+    const personalMatches = preferences.map((preference) => {
+      const matches = preference.themes.filter((theme) => course.tags.includes(theme)).length
+      return matches / Math.max(1, preference.themes.length)
+    })
+    const average = personalMatches.reduce((sum, value) => sum + value, 0) / personalMatches.length
+    const leastSatisfied = Math.min(...personalMatches)
+    const coveredThemes = new Set(preferences.flatMap((preference) => preference.themes).filter((theme) => course.tags.includes(theme))).size
+    const match = Math.round(Math.min(99, 55 + average * 30 + leastSatisfied * 10 + Math.min(5, coveredThemes)))
+    return { ...course, match }
+  }).sort((a, b) => b.match - a.match || a.id.localeCompare(b.id))
 }

@@ -18,6 +18,10 @@ interface Env {
       };
     };
   };
+  NAVER_MAPS_CLIENT_ID?: string;
+  NAVER_MAPS_CLIENT_SECRET?: string;
+  NAVER_SEARCH_CLIENT_ID?: string;
+  NAVER_SEARCH_CLIENT_SECRET?: string;
 }
 
 interface ExecutionContext {
@@ -34,6 +38,46 @@ interface ExecutionContext {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/naver/config") {
+      return Response.json({
+        enabled: Boolean(env.NAVER_MAPS_CLIENT_ID),
+        clientId: env.NAVER_MAPS_CLIENT_ID ?? null,
+      }, { headers: { "Cache-Control": "public, max-age=3600" } });
+    }
+
+    if (url.pathname === "/api/naver/local") {
+      if (request.method !== "GET") return new Response("Method Not Allowed", { status: 405 });
+      const query = url.searchParams.get("query")?.trim();
+      if (!query || query.length > 80) return Response.json({ error: "검색어를 확인해 주세요." }, { status: 400 });
+      if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) {
+        return Response.json({ error: "네이버 지역 검색이 아직 설정되지 않았습니다." }, { status: 503 });
+      }
+      const endpoint = new URL("https://openapi.naver.com/v1/search/local.json");
+      endpoint.searchParams.set("query", query);
+      endpoint.searchParams.set("display", "5");
+      endpoint.searchParams.set("sort", "random");
+      const response = await fetch(endpoint, {
+        headers: {
+          "X-Naver-Client-Id": env.NAVER_SEARCH_CLIENT_ID,
+          "X-Naver-Client-Secret": env.NAVER_SEARCH_CLIENT_SECRET,
+        },
+      });
+      if (!response.ok) return Response.json({ error: "네이버 장소 정보를 불러오지 못했습니다." }, { status: 502 });
+      const data = await response.json() as { items?: Array<Record<string, unknown>> };
+      const stripTags = (value: unknown) => String(value ?? "").replace(/<[^>]*>/g, "");
+      return Response.json({
+        items: (data.items ?? []).map((item) => ({
+          title: stripTags(item.title),
+          category: item.category,
+          address: item.address,
+          roadAddress: item.roadAddress,
+          mapx: item.mapx,
+          mapy: item.mapy,
+          link: item.link,
+        })),
+      }, { headers: { "Cache-Control": "public, max-age=900" } });
+    }
 
     // Image optimization via Cloudflare Images binding.
     // The parseImageParams validation inside handleImageOptimization

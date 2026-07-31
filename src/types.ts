@@ -23,6 +23,11 @@ export type Stop = {
   shared: boolean
   reservable?: boolean
   description: string
+  latitude?: number
+  longitude?: number
+  source?: '한국관광공사·부산관광포털' | '네이버 지역검색' | '운영자 검수'
+  verifiedAt?: string
+  placeUrl?: string
 }
 
 export type Course = {

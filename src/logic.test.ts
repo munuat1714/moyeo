@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { aggregateThemes, allPreferencesComplete, tallyVotes } from './logic'
-import type { Member } from './types'
+import { aggregateThemes, allPreferencesComplete, recommendCourses, tallyVotes } from './logic'
+import type { Course, Member } from './types'
 
 const preference = { themes: ['맛집', '사진'], pace: '적당하게', food: '한식', mood: '감성적인', constraint: '' }
 
@@ -34,5 +34,16 @@ describe('여행 그룹 핵심 로직', () => {
       winners: ['balance', 'slow'],
       tied: true,
     })
+  })
+
+  it('그룹 취향과 가장 낮은 개인 만족도를 함께 반영한다', () => {
+    const sample = (id: string, tags: string[]): Course => ({ id, title: id, label: '', emoji: '', description: '', match: 0, tags, totalPrice: 0, travelMinutes: 0, days: [[], []] })
+    const members: Member[] = [
+      { id: '1', name: '민지', color: '#fff', preference: { ...preference, themes: ['맛집', '사진'] } },
+      { id: '2', name: '서준', color: '#000', preference: { ...preference, themes: ['맛집', '산책'] } },
+    ]
+    const ranked = recommendCourses([sample('photo', ['사진']), sample('balanced', ['맛집', '산책'])], members)
+    expect(ranked[0].id).toBe('balanced')
+    expect(ranked[0].match).toBeGreaterThan(ranked[1].match)
   })
 })

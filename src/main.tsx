@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, ChevronRight, CircleDollarSign,
@@ -9,7 +9,7 @@ import {
   UserRound, UsersRound, Utensils, Vote, WalletCards, X,
 } from 'lucide-react'
 import { courses, demoPreferences, foods, initialState, moods, paces, themes } from './data'
-import { aggregateThemes, allPreferencesComplete, formatPrice, tallyVotes } from './logic'
+import { aggregateThemes, allPreferencesComplete, formatPrice, recommendCourses, tallyVotes } from './logic'
 import type { AppState, Course, Preference, Stop } from './types'
 import './styles.css'
 
@@ -44,8 +44,10 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
     ...loadState(),
     step: isDemo ? 'room' : 'home',
   }))
-  const [selectedCourse, setSelectedCourse] = useState<Course>(courses[0])
+  const [selectedCourseId, setSelectedCourseId] = useState(courses[0].id)
   const [finalTab, setFinalTab] = useState<'schedule' | 'map' | 'booking'>('schedule')
+  const recommendedCourses = useMemo(() => recommendCourses(courses, state.members), [state.members])
+  const selectedCourse = recommendedCourses.find((course) => course.id === selectedCourseId) ?? recommendedCourses[0]
 
   useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)), [state])
   useEffect(() => { track('landing_view') }, [])
@@ -54,7 +56,7 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
   const reset = () => {
     localStorage.removeItem(STORAGE_KEY)
     setState({ ...initialState, step: isDemo ? 'room' : 'home' })
-    setSelectedCourse(courses[0])
+    setSelectedCourseId(courses[0].id)
   }
 
   const headerBack: Partial<Record<AppState['step'], AppState['step']>> = {
@@ -82,9 +84,9 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
         {state.step === 'room' && <Room state={state} setState={setState} />}
         {state.step === 'preferences' && <Preferences state={state} setState={setState} />}
         {state.step === 'analysis' && <Analysis state={state} onNext={() => update({ step: 'courses' })} />}
-        {state.step === 'courses' && <Courses selected={selectedCourse} setSelected={setSelectedCourse} onVote={() => update({ step: 'vote' })} />}
-        {state.step === 'vote' && <Voting state={state} setState={setState} />}
-        {state.step === 'final' && <FinalTrip state={state} setState={setState} tab={finalTab} setTab={setFinalTab} />}
+        {state.step === 'courses' && <Courses courses={recommendedCourses} selected={selectedCourse} setSelected={(course) => setSelectedCourseId(course.id)} onVote={() => update({ step: 'vote' })} />}
+        {state.step === 'vote' && <Voting courses={recommendedCourses} state={state} setState={setState} />}
+        {state.step === 'final' && <FinalTrip courses={recommendedCourses} state={state} setState={setState} tab={finalTab} setTab={setFinalTab} />}
       </main>
     </div>
   )
@@ -244,7 +246,7 @@ function Analysis({ state, onNext }: { state: AppState; onNext: () => void }) {
   )
 }
 
-function Courses({ selected, setSelected, onVote }: { selected: Course; setSelected: (c: Course) => void; onVote: () => void }) {
+function Courses({ courses, selected, setSelected, onVote }: { courses: Course[]; selected: Course; setSelected: (c: Course) => void; onVote: () => void }) {
   const [detail, setDetail] = useState(false)
   return (
     <section className="page courses-page">
@@ -254,7 +256,8 @@ function Courses({ selected, setSelected, onVote }: { selected: Course; setSelec
         {courses.map((course) => <button key={course.id} className={selected.id === course.id ? 'active' : ''} onClick={() => { setSelected(course); setDetail(false) }}><span>{course.emoji}</span>{course.title.split(' ')[0]}</button>)}
       </div>
       <CourseCard course={selected} expanded={detail} onToggle={() => setDetail(!detail)} />
-      <div className="common-note"><span>60%</span><div><b>세 코스가 함께 가는 곳</b><p>황리단길 · 교리김밥 · 대릉원 · 경주 원조콩국</p></div></div>
+      <div className="common-note"><span>60%</span><div><b>세 코스가 함께 가는 곳</b><p>감천문화마을 · 자갈치시장 · 전포카페거리 · 광안리해수욕장</p></div></div>
+      <div className="data-notice"><ShieldCheck size={15} /><span>공식 관광정보를 바탕으로 구성했으며, 운영시간·요금·교통은 네이버지도에서 방문 전에 다시 확인해 주세요.</span></div>
       <button className="primary-button sticky-action" onClick={onVote}>친구들과 투표하기 <Vote size={18} /></button>
     </section>
   )
@@ -276,7 +279,7 @@ function CourseCard({ course, expanded, onToggle }: { course: Course; expanded: 
   )
 }
 
-function Voting({ state, setState }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
+function Voting({ courses, state, setState }: { courses: Course[]; state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [voterId, setVoterId] = useState(state.members.find((m) => !state.votes[m.id])?.id ?? state.members[0].id)
   const [selectedId, setSelectedId] = useState('')
   const allVoted = state.members.every((m) => state.votes[m.id])
@@ -323,7 +326,7 @@ function Voting({ state, setState }: { state: AppState; setState: React.Dispatch
   )
 }
 
-function FinalTrip({ state, setState, tab, setTab }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>>; tab: 'schedule' | 'map' | 'booking'; setTab: (t: 'schedule' | 'map' | 'booking') => void }) {
+function FinalTrip({ courses, state, setState, tab, setTab }: { courses: Course[]; state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>>; tab: 'schedule' | 'map' | 'booking'; setTab: (t: 'schedule' | 'map' | 'booking') => void }) {
   const course = courses.find((c) => c.id === state.finalCourseId) ?? courses[0]
   const [day, setDay] = useState(0)
   const [schedule, setSchedule] = useState<Stop[][]>(() => course.days.map((items) => [...items]))
@@ -374,7 +377,7 @@ function FinalTrip({ state, setState, tab, setTab }: { state: AppState; setState
         <button className={tab === 'booking' ? 'active' : ''} onClick={() => setTab('booking')}><WalletCards size={17} />예약</button>
       </div>
       {tab === 'schedule' && <div className="final-content"><div className="day-switch"><button className={day === 0 ? 'active' : ''} onClick={() => setDay(0)}>DAY 1 <small>8.15 토</small></button><button className={day === 1 ? 'active' : ''} onClick={() => setDay(1)}>DAY 2 <small>8.16 일</small></button></div><Timeline stops={schedule[day]} onRemove={removeStop} /><button className="outline-button copy-plan" onClick={copyPlan}>{copied ? <Check size={17} /> : <Copy size={17} />}{copied ? '일정을 복사했어요' : '전체 일정 복사하기'}</button></div>}
-      {tab === 'map' && <div className="final-content"><RouteMap stops={schedule[day]} /><div className="map-summary"><b>DAY {day + 1} 이동 요약</b><span><TrainFront size={15} /> 총 {day === 0 ? 72 : 46}분 · {schedule[day].length}개 장소</span></div></div>}
+      {tab === 'map' && <div className="final-content"><RouteMap stops={schedule[day]} /><div className="map-summary"><b>DAY {day + 1} 이동 요약</b><span><TrainFront size={15} /> 예상 {day === 0 ? 72 : 46}분 · {schedule[day].length}개 장소</span></div><p className="map-disclaimer">표시된 선은 장소 순서를 나타냅니다. 실제 도보·대중교통 경로와 시간은 네이버지도에서 확인해 주세요.</p></div>}
       {tab === 'booking' && <div className="final-content"><div className="section-title-row"><h3>예약이 필요한 항목</h3><span className="count-badge">{state.booked.length}/{reservable.length}</span></div><div className="booking-list">{reservable.map((stop) => <div key={stop.title}><span className="booking-icon">{stop.category === '교통' ? <TrainFront /> : stop.category === '숙소' ? <Home /> : <Compass />}</span><div><small>{stop.category} · {stop.time}</small><b>{stop.title}</b><span>{formatPrice(stop.price)}</span></div>{state.booked.includes(stop.title) ? <span className="booked"><Check size={14} /> 완료</span> : <button onClick={() => book(stop.title)}>예약 연결</button>}</div>)}</div><div className="booking-notice">실제 결제는 진행되지 않는 MVP 시뮬레이션입니다.</div></div>}
       <div className="validation-panel">
         <section className="feedback-card">
@@ -396,11 +399,61 @@ function FinalTrip({ state, setState, tab, setTab }: { state: AppState; setState
 
 function Timeline({ stops, onRemove }: { stops: Stop[]; onRemove?: (index: number) => void }) {
   if (stops.length === 0) return <div className="empty-schedule"><CalendarDays size={22} /><b>이 날짜의 일정이 비었어요.</b><span>처음부터 다시 시작하면 원래 추천 일정을 불러올 수 있어요.</span></div>
-  return <div className="timeline">{stops.map((stop, index) => <div className="timeline-stop" key={stop.time + stop.title}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className="stop-card"><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><b>{stop.title}</b><p>{stop.description}</p><span>{stop.price === 0 ? '무료' : formatPrice(stop.price)}</span></div></div>)}</div>
+  return <div className="timeline">{stops.map((stop, index) => <div className="timeline-stop" key={stop.time + stop.title}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className="stop-card"><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><b>{stop.title}</b><p>{stop.description}</p><div className="stop-footer"><span>{stop.price === 0 ? '무료' : `${formatPrice(stop.price)} 예상`}</span><small>{stop.source ?? '운영자 검수'}{stop.verifiedAt ? ` · ${stop.verifiedAt} 확인` : ''}</small></div><PlaceLookup stop={stop} /></div></div>)}</div>
 }
 
 function RouteMap({ stops }: { stops: Stop[] }) {
-  return <div className="route-map"><div className="map-grid" /><div className="route-path" />{stops.slice(0, 5).map((stop, i) => <div key={stop.title} className={`map-stop stop-${i}`}><i>{i + 1}</i><span>{stop.title}</span></div>)}</div>
+  const container = useRef<HTMLDivElement>(null)
+  const [mapReady, setMapReady] = useState(false)
+  const [mapUnavailable, setMapUnavailable] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    const points = stops.filter((stop) => stop.latitude && stop.longitude)
+    if (!container.current || points.length === 0) return
+    const initialize = async () => {
+      try {
+        const config = await fetch('/api/naver/config').then((response) => response.json()) as { enabled: boolean; clientId?: string }
+        if (!config.enabled || !config.clientId) throw new Error('not-configured')
+        const load = () => new Promise<void>((resolve, reject) => {
+          if ((window as any).naver?.maps) return resolve()
+          const existing = document.getElementById('naver-map-sdk') as HTMLScriptElement | null
+          if (existing) { existing.addEventListener('load', () => resolve(), { once: true }); existing.addEventListener('error', reject, { once: true }); return }
+          const script = document.createElement('script')
+          script.id = 'naver-map-sdk'
+          script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(config.clientId!)}`
+          script.onload = () => resolve(); script.onerror = reject; document.head.appendChild(script)
+        })
+        await load()
+        if (cancelled || !container.current) return
+        const maps = (window as any).naver.maps
+        const coords = points.map((stop) => new maps.LatLng(stop.latitude, stop.longitude))
+        const map = new maps.Map(container.current, { center: coords[0], zoom: 12, zoomControl: true })
+        coords.forEach((position: unknown, index: number) => new maps.Marker({ position, map, title: `${index + 1}. ${points[index].title}` }))
+        new maps.Polyline({ map, path: coords, strokeColor: '#1769aa', strokeWeight: 4, strokeOpacity: 0.8 })
+        const bounds = new maps.LatLngBounds(); coords.forEach((coord: unknown) => bounds.extend(coord)); map.fitBounds(bounds, { top: 45, right: 30, bottom: 45, left: 30 })
+        setMapReady(true)
+      } catch { if (!cancelled) setMapUnavailable(true) }
+    }
+    initialize()
+    return () => { cancelled = true }
+  }, [stops])
+  return <div className="route-map-wrap"><div ref={container} className={`route-map naver-map ${mapReady ? 'ready' : ''}`} />{!mapReady && <div className="route-map route-map-fallback"><div className="map-grid" /><div className="route-path" />{stops.slice(0, 5).map((stop, i) => <div key={stop.title} className={`map-stop stop-${i}`}><i>{i + 1}</i><span>{stop.title}</span></div>)}</div>}{mapUnavailable && <span className="map-fallback-note">네이버 지도 키를 설정하면 실제 지도가 표시됩니다.</span>}</div>
+}
+
+function PlaceLookup({ stop }: { stop: Stop }) {
+  const [result, setResult] = useState<{ title: string; roadAddress?: string; link?: string } | null>(null)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const lookup = async () => {
+    setStatus('loading')
+    try {
+      const response = await fetch(`/api/naver/local?query=${encodeURIComponent(`부산 ${stop.title}`)}`)
+      if (!response.ok) throw new Error('lookup-failed')
+      const data = await response.json() as { items?: Array<{ title: string; roadAddress?: string; link?: string }> }
+      setResult(data.items?.[0] ?? null)
+      setStatus(data.items?.length ? 'idle' : 'error')
+    } catch { setStatus('error') }
+  }
+  return <div className="place-lookup"><button onClick={lookup} disabled={status === 'loading'}>{status === 'loading' ? '확인 중…' : '네이버 최신정보 확인'}</button><a href={result?.link || stop.placeUrl || `https://map.naver.com/p/search/${encodeURIComponent(stop.title)}`} target="_blank" rel="noreferrer"><ExternalLink size={12} /> 네이버지도</a>{result && <small>{result.title}{result.roadAddress ? ` · ${result.roadAddress}` : ''}</small>}{status === 'error' && <small>API 연결 전이거나 검색 결과가 없습니다. 지도에서 직접 확인해 주세요.</small>}</div>
 }
 
 function iconFor(category: string) {

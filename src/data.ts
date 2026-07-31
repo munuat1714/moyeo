@@ -1,4 +1,4 @@
-import type { AppState, Course, Preference } from './types'
+import type { AppState, Course, Preference, Stop } from './types'
 
 export const themes = ['맛집', '감성 카페', '사진', '산책', '액티비티', '역사']
 export const paces = ['여유롭게', '적당하게', '알차게']
@@ -15,9 +15,9 @@ export const demoPreferences: Record<string, Preference> = {
 export const initialState: AppState = {
   step: 'home',
   trip: {
-    name: '우리들의 경주 한바퀴',
-    origin: '부산',
-    destination: '경주',
+    name: '우리들의 부산 한바퀴',
+    origin: '부산역',
+    destination: '부산',
     startDate: '2026-08-15',
     endDate: '2026-08-16',
     transport: '대중교통',
@@ -29,69 +29,63 @@ export const initialState: AppState = {
     { id: 'yuna', name: '유나', color: '#9b6bdf' },
     { id: 'hyunwoo', name: '현우', color: '#18a778' },
   ],
-  activeMemberId: 'minji',
-  votes: {},
-  voteRound: 1,
-  runoffCourseIds: [],
-  booked: [],
+  activeMemberId: 'minji', votes: {}, voteRound: 1, runoffCourseIds: [], booked: [],
 }
 
-const sharedDay1 = [
-  { time: '09:00', title: '부산역 출발', category: '교통', duration: '55분', price: 11000, shared: true, reservable: true, description: 'KTX로 빠르고 편하게 경주까지 이동해요.' },
-  { time: '10:20', title: '황리단길 산책', category: '관광', duration: '1시간', price: 0, shared: true, description: '한옥 골목과 작은 상점을 천천히 둘러봐요.' },
-  { time: '12:00', title: '교리김밥 본점', category: '맛집', duration: '50분', price: 11000, shared: true, description: '그룹 최다 취향인 맛집을 반영했어요.' },
+const checked = '2026-07-31'
+const official = '한국관광공사·부산관광포털' as const
+const place = (stop: Stop): Stop => ({ source: official, verifiedAt: checked, ...stop })
+
+const sharedDay1: Stop[] = [
+  place({ time: '09:30', title: '부산역', category: '교통', duration: '20분', price: 0, shared: true, description: '부산 원도심 여행을 시작해요. 이동시간은 실시간 길찾기에서 다시 확인해 주세요.', latitude: 35.1151, longitude: 129.0414, placeUrl: 'https://map.naver.com/p/search/부산역' }),
+  place({ time: '10:20', title: '감천문화마을', category: '사진', duration: '1시간 30분', price: 0, shared: true, description: '산복도로 풍경과 골목을 담는 부산 대표 사진 코스예요.', latitude: 35.0975, longitude: 129.0106, placeUrl: 'https://map.naver.com/p/search/감천문화마을' }),
+  place({ time: '12:30', title: '자갈치시장', category: '맛집', duration: '1시간 20분', price: 20000, shared: true, description: '부산의 로컬 시장을 둘러보고 식사해요. 가격은 메뉴에 따른 1인 예상치예요.', latitude: 35.0967, longitude: 129.0305, placeUrl: 'https://map.naver.com/p/search/자갈치시장' }),
 ]
 
-const sharedDay2 = [
-  { time: '09:30', title: '대릉원 돌담길', category: '산책', duration: '1시간', price: 3000, shared: true, description: '아침의 여유를 즐기는 공통 산책 코스예요.' },
-  { time: '12:30', title: '경주 원조콩국', category: '맛집', duration: '1시간', price: 13000, shared: true, description: '가볍고 든든한 경주 로컬 한식이에요.' },
-  { time: '17:10', title: '신경주역 출발', category: '교통', duration: '55분', price: 11000, shared: true, reservable: true, description: '부산으로 돌아가는 KTX예요.' },
+const sharedDay2: Stop[] = [
+  place({ time: '10:00', title: '전포카페거리', category: '카페', duration: '1시간 30분', price: 8000, shared: true, description: '공구길 골목의 개성 있는 카페를 취향에 맞게 골라요.', latitude: 35.1577, longitude: 129.0630, placeUrl: 'https://map.naver.com/p/search/전포카페거리' }),
+  place({ time: '14:00', title: '광안리해수욕장', category: '산책', duration: '1시간 30분', price: 0, shared: true, description: '바다와 광안대교를 보며 천천히 걷는 공통 일정이에요.', latitude: 35.1532, longitude: 129.1187, placeUrl: 'https://map.naver.com/p/search/광안리해수욕장' }),
+  place({ time: '17:30', title: '부산역', category: '교통', duration: '20분', price: 0, shared: true, description: '여행을 마무리해요. 출발 전 실제 대중교통 시간을 확인해 주세요.', latitude: 35.1151, longitude: 129.0414, placeUrl: 'https://map.naver.com/p/search/부산역' }),
 ]
 
 export const courses: Course[] = [
   {
-    id: 'balance',
-    title: '모두의 취향 밸런스',
-    label: '가장 추천',
-    emoji: '🍊',
-    description: '맛집·카페·사진 취향을 고르게 담은 실패 없는 코스',
-    match: 92,
-    tags: ['맛집', '감성 카페', '사진'],
-    totalPrice: 128000,
-    travelMinutes: 118,
+    id: 'balance', title: '바다와 골목 밸런스', label: '가장 추천', emoji: '✨',
+    description: '맛집·카페·사진 취향을 고르게 담은 부산 핵심 코스', match: 92,
+    tags: ['맛집', '감성 카페', '사진'], totalPrice: 118000, travelMinutes: 128,
     days: [
-      [...sharedDay1, { time: '14:00', title: '카페 올리브', category: '카페', duration: '1시간 20분', price: 8500, shared: false, description: '3명이 선택한 감성 카페 취향을 반영했어요.' }, { time: '16:00', title: '첨성대 노을 스냅', category: '사진', duration: '1시간 30분', price: 0, shared: false, description: '사진 취향을 위한 골든아워 코스예요.' }, { time: '19:00', title: '황남관 한옥스테이', category: '숙소', duration: '1박', price: 74000, shared: false, reservable: true, description: '감성적인 분위기의 도심 한옥 숙소예요.' }],
-      [...sharedDay2, { time: '11:00', title: '월정교 포토워크', category: '사진', duration: '1시간', price: 0, shared: false, description: '산책과 사진을 함께 즐겨요.' }, { time: '14:00', title: '국립경주박물관', category: '역사', duration: '1시간 30분', price: 0, shared: false, description: '소수의 역사 취향도 놓치지 않았어요.' }],
+      [...sharedDay1,
+        place({ time: '15:00', title: '흰여울문화마을', category: '사진', duration: '1시간 30분', price: 0, shared: false, description: '바다 절벽과 골목 풍경을 함께 담는 영도 포토워크예요.', latitude: 35.0786, longitude: 129.0443, placeUrl: 'https://map.naver.com/p/search/흰여울문화마을' }),
+        place({ time: '18:30', title: '광안리 숙소 체크인', category: '숙소', duration: '1박', price: 90000, shared: false, reservable: true, description: '다음 날 광안리 동선을 줄이는 숙소 권역 제안이에요. 실제 숙소와 가격은 예약 전에 비교하세요.', latitude: 35.1532, longitude: 129.1187, source: '운영자 검수', placeUrl: 'https://map.naver.com/p/search/광안리 숙소' })],
+      [...sharedDay2,
+        place({ time: '12:00', title: '부산시민공원', category: '산책', duration: '1시간', price: 0, shared: false, description: '전포에서 가까운 도심 속 산책으로 일정의 속도를 조절해요.', latitude: 35.1667, longitude: 129.0571, placeUrl: 'https://map.naver.com/p/search/부산시민공원' }),
+        place({ time: '16:00', title: '민락수변공원', category: '사진', duration: '50분', price: 0, shared: false, description: '광안리와 이어지는 바다 풍경을 한 번 더 담아요.', latitude: 35.1555, longitude: 129.1328, placeUrl: 'https://map.naver.com/p/search/민락수변공원' })],
     ],
   },
   {
-    id: 'slow',
-    title: '카페와 산책 사이',
-    label: '여유 충전',
-    emoji: '🌿',
-    description: '머무는 시간을 늘리고 이동은 가볍게 줄인 감성 코스',
-    match: 87,
-    tags: ['감성 카페', '산책', '사진'],
-    totalPrice: 121000,
-    travelMinutes: 92,
+    id: 'slow', title: '영도에서 천천히', label: '여유 충전', emoji: '🌿',
+    description: '영도 바다와 전포 카페에서 머무는 시간을 늘린 감성 코스', match: 87,
+    tags: ['감성 카페', '산책', '사진'], totalPrice: 112000, travelMinutes: 104,
     days: [
-      [...sharedDay1, { time: '14:00', title: '카페 능', category: '카페', duration: '2시간', price: 9000, shared: false, description: '오래 머물기 좋은 한옥 카페예요.' }, { time: '16:30', title: '계림 숲길', category: '산책', duration: '1시간 20분', price: 0, shared: false, description: '붐비지 않는 숲길을 천천히 걸어요.' }, { time: '19:00', title: '소소한옥', category: '숙소', duration: '1박', price: 69000, shared: false, reservable: true, description: '조용히 쉬기 좋은 독채형 숙소예요.' }],
-      [...sharedDay2, { time: '11:00', title: '교촌마을 산책', category: '산책', duration: '1시간 30분', price: 0, shared: false, description: '전통 담장길을 따라 여유롭게 걸어요.' }, { time: '14:30', title: '오릉 피크닉', category: '휴식', duration: '1시간 20분', price: 4000, shared: false, description: '여행 마지막을 가볍게 마무리해요.' }],
+      [...sharedDay1,
+        place({ time: '15:00', title: '태종대유원지', category: '산책', duration: '2시간', price: 0, shared: false, description: '바다와 숲을 함께 즐기는 여유로운 영도 산책이에요.', latitude: 35.0512, longitude: 129.0872, placeUrl: 'https://map.naver.com/p/search/태종대유원지' }),
+        place({ time: '18:30', title: '영도 숙소 체크인', category: '숙소', duration: '1박', price: 84000, shared: false, reservable: true, description: '영도에서 이동을 줄이는 숙소 권역 제안이에요. 실제 가격과 운영 여부를 확인하세요.', latitude: 35.0912, longitude: 129.0680, source: '운영자 검수', placeUrl: 'https://map.naver.com/p/search/영도 숙소' })],
+      [...sharedDay2,
+        place({ time: '12:00', title: 'F1963', category: '관광', duration: '1시간 20분', price: 0, shared: false, description: '전시와 책, 정원을 함께 둘러보는 조용한 문화 공간이에요.', latitude: 35.1776, longitude: 129.1153, placeUrl: 'https://map.naver.com/p/search/F1963' }),
+        place({ time: '16:00', title: '수영사적공원', category: '역사', duration: '50분', price: 0, shared: false, description: '광안리 근처에서 부산의 역사 취향도 가볍게 반영해요.', latitude: 35.1710, longitude: 129.1130, placeUrl: 'https://map.naver.com/p/search/수영사적공원' })],
     ],
   },
   {
-    id: 'active',
-    title: '경주 꽉 찬 모험',
-    label: '에너지 MAX',
-    emoji: '⚡',
-    description: '활동적인 체험과 대표 명소를 빠짐없이 넣은 알찬 코스',
-    match: 81,
-    tags: ['액티비티', '맛집', '역사'],
-    totalPrice: 149000,
-    travelMinutes: 146,
+    id: 'active', title: '해안 액티비티 부산', label: '에너지 MAX', emoji: '⚡',
+    description: '송도와 해운대의 해안 체험을 넣은 활동적인 코스', match: 81,
+    tags: ['액티비티', '맛집', '사진'], totalPrice: 151000, travelMinutes: 154,
     days: [
-      [...sharedDay1, { time: '14:00', title: '보문호 자전거', category: '액티비티', duration: '1시간 30분', price: 12000, shared: false, reservable: true, description: '소수의 액티비티 취향을 확실하게 반영했어요.' }, { time: '16:20', title: '경주월드 드라켄', category: '액티비티', duration: '2시간', price: 26000, shared: false, reservable: true, description: '짧지만 강렬한 대표 체험이에요.' }, { time: '20:00', title: '보문 스테이', category: '숙소', duration: '1박', price: 65000, shared: false, reservable: true, description: '다음 날 이동이 편한 실용적인 숙소예요.' }],
-      [...sharedDay2, { time: '11:00', title: '불국사 미션 투어', category: '역사', duration: '1시간 30분', price: 6000, shared: false, reservable: true, description: '역사 취향을 재미있는 미션으로 즐겨요.' }, { time: '14:30', title: '동궁과 월지', category: '관광', duration: '1시간', price: 3000, shared: false, description: '경주의 대표 명소까지 알차게 챙겨요.' }],
+      [...sharedDay1,
+        place({ time: '15:00', title: '송도해상케이블카', category: '액티비티', duration: '1시간 30분', price: 22000, shared: false, reservable: true, description: '바다 위를 지나며 송도 해안을 보는 체험이에요. 운행 여부와 요금은 방문 전에 확인하세요.', latitude: 35.0764, longitude: 129.0239, placeUrl: 'https://map.naver.com/p/search/송도해상케이블카' }),
+        place({ time: '18:30', title: '해운대 숙소 체크인', category: '숙소', duration: '1박', price: 95000, shared: false, reservable: true, description: '둘째 날 동부 해안 일정을 위한 숙소 권역 제안이에요.', latitude: 35.1595, longitude: 129.1604, source: '운영자 검수', placeUrl: 'https://map.naver.com/p/search/해운대 숙소' })],
+      [...sharedDay2,
+        place({ time: '12:00', title: '해운대 블루라인파크 미포정거장', category: '액티비티', duration: '1시간 30분', price: 16000, shared: false, reservable: true, description: '해안 풍경을 따라 이동하는 체험이에요. 탑승권과 운행시간을 먼저 확인하세요.', latitude: 35.1594, longitude: 129.1637, placeUrl: 'https://map.naver.com/p/search/해운대 블루라인파크 미포정거장' }),
+        place({ time: '16:00', title: '청사포 다릿돌전망대', category: '사진', duration: '50분', price: 0, shared: false, description: '청사포 바다를 가까이서 보는 사진 일정이에요.', latitude: 35.1612, longitude: 129.1915, placeUrl: 'https://map.naver.com/p/search/청사포 다릿돌전망대' })],
     ],
   },
 ]
