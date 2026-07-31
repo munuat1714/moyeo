@@ -8,8 +8,10 @@
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import type { ImageConfig } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { deleteExpiredRooms, handleRoomApi } from "./rooms";
 
 interface Env {
+  DB: D1Database;
   ASSETS: Fetcher;
   IMAGES: {
     input(stream: ReadableStream): {
@@ -38,6 +40,11 @@ interface ExecutionContext {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith('/api/rooms')) {
+      const roomResponse = await handleRoomApi(request, env.DB, url);
+      if (roomResponse) return roomResponse;
+    }
 
     if (url.pathname === "/api/naver/config") {
       return Response.json({
@@ -97,5 +104,8 @@ export default {
     // ctx.waitUntil() is available to background cache writes and
     // other deferred work via getRequestExecutionContext().
     return handler.fetch(request, env, ctx);
+  },
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(deleteExpiredRooms(env.DB));
   },
 };

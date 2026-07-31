@@ -10,6 +10,8 @@ import {
 } from 'lucide-react'
 import { courses, demoPreferences, foods, initialState, moods, paces, themes } from './data'
 import { aggregateThemes, allPreferencesComplete, formatPrice, recommendCourses, tallyVotes } from './logic'
+import { createLiveRoom, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLivePreference, saveRoomToken, submitLiveVote } from './live'
+import type { LiveSnapshot } from './live'
 import type { AppState, Course, Preference, Stop } from './types'
 import './styles.css'
 
@@ -39,6 +41,8 @@ function loadState(): AppState {
 }
 
 export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
+  const [liveRoomId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('room') ?? '')
+  if (liveRoomId) return <LiveRoomApp roomId={liveRoomId} />
   const isDemo = mode === 'demo'
   const [state, setState] = useState<AppState>(() => ({
     ...loadState(),
@@ -97,6 +101,124 @@ const stepTitle: Record<AppState['step'], string> = {
   analysis: '우리 취향', courses: '추천 코스', vote: '코스 투표', final: '최종 여행',
 }
 
+function LiveRoomApp({ roomId }: { roomId: string }) {
+  const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [name, setName] = useState('')
+  const [joining, setJoining] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [preference, setPreference] = useState<Preference>({ themes: [], pace: '적당하게', food: '한식', mood: '감성적인', constraint: '' })
+  const [saving, setSaving] = useState(false)
+  const [selectedCourseId, setSelectedCourseId] = useState('')
+  const [working, setWorking] = useState(false)
+  const [finalDay, setFinalDay] = useState(0)
+
+  const refresh = async (quiet = false) => {
+    if (!quiet) setLoading(true)
+    try {
+      const next = await fetchLiveRoom(roomId)
+      setSnapshot(next)
+      setError('')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '여행방을 불러오지 못했습니다.')
+    } finally {
+      if (!quiet) setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void refresh()
+    const timer = window.setInterval(() => void refresh(true), 5000)
+    return () => window.clearInterval(timer)
+  }, [roomId])
+
+  const requester = snapshot?.members.find((member) => member.id === snapshot.requesterMemberId)
+  const allJoined = Boolean(snapshot && snapshot.members.length === snapshot.room.expectedMembers)
+  const allReady = Boolean(snapshot && allJoined && snapshot.members.every((member) => member.preferenceComplete))
+  const recommended = useMemo(() => snapshot ? recommendCourses(courses, snapshot.members) : courses, [snapshot])
+  const availableCourses = snapshot?.room.voteRound === 2
+    ? recommended.filter((course) => snapshot.room.runoffCourseIds.includes(course.id))
+    : recommended
+  const finalCourse = recommended.find((course) => course.id === snapshot?.room.finalCourseId)
+
+  const join = async () => {
+    if (!name.trim()) return
+    setJoining(true); setError('')
+    try {
+      const result = await joinLiveRoom(roomId, name.trim())
+      saveRoomToken(roomId, result.token)
+      await refresh()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '여행방에 참여하지 못했습니다.')
+    } finally { setJoining(false) }
+  }
+
+  const toggleTheme = (theme: string) => setPreference((current) => ({
+    ...current,
+    themes: current.themes.includes(theme) ? current.themes.filter((item) => item !== theme) : current.themes.length < 3 ? [...current.themes, theme] : current.themes,
+  }))
+
+  const savePreference = async () => {
+    setSaving(true); setError('')
+    try {
+      await saveLivePreference(roomId, preference)
+      await refresh()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '취향을 저장하지 못했습니다.')
+    } finally { setSaving(false) }
+  }
+
+  const copyInvite = async () => {
+    const invite = `${window.location.origin}/demo?room=${roomId}`
+    try { await navigator.clipboard.writeText(invite) } catch { window.prompt('아래 초대 링크를 복사해 주세요.', invite) }
+    setCopied(true); window.setTimeout(() => setCopied(false), 1600)
+  }
+
+  const vote = async () => {
+    if (!selectedCourseId) return
+    setWorking(true); setError('')
+    try { await submitLiveVote(roomId, selectedCourseId); setSelectedCourseId(''); await refresh() }
+    catch (reason) { setError(reason instanceof Error ? reason.message : '투표를 저장하지 못했습니다.') }
+    finally { setWorking(false) }
+  }
+
+  const resolve = async () => {
+    setWorking(true); setError('')
+    try { await resolveLiveVote(roomId); await refresh() }
+    catch (reason) { setError(reason instanceof Error ? reason.message : '투표 결과를 확정하지 못했습니다.') }
+    finally { setWorking(false) }
+  }
+
+  if (loading) return <div className="app-shell"><main className="live-state"><Sparkles /><b>여행방을 불러오는 중이에요</b></main></div>
+  if (!snapshot) return <div className="app-shell"><main className="live-state"><Clock3 /><h2>여행방을 열 수 없어요</h2><p>{error}</p><a className="primary-button" href="/demo">새 여행방 만들기</a></main></div>
+
+  const expires = new Date(snapshot.room.expiresAt * 1000).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const voteCounts = Object.values(snapshot.votes).reduce<Record<string, number>>((counts, id) => ({ ...counts, [id]: (counts[id] ?? 0) + 1 }), {})
+
+  return <div className="app-shell live-room-shell">
+    <header className="app-header"><a className="icon-button" href="/demo" aria-label="데모 홈"><Home size={18} /></a><div className="header-title">실시간 여행방</div><span className="live-code">{roomId}</span></header>
+    <main className="page">
+      <div className="trip-summary live-trip"><span className="eyebrow dark"><CalendarDays size={14} /> {snapshot.room.startDate} — {snapshot.room.endDate}</span><h2>{snapshot.room.name}</h2><div className="trip-meta"><span><MapPin size={15} /> {snapshot.room.origin} → {snapshot.room.destination}</span><span><UsersRound size={15} /> {snapshot.members.length}/{snapshot.room.expectedMembers}명</span></div></div>
+      <div className="expiry-notice"><Clock3 size={16} /><span><b>{expires}</b>까지 이용할 수 있으며 이후 자동 삭제됩니다.</span></div>
+      {error && <div className="form-error" role="alert">{error}</div>}
+
+      {!snapshot.requesterMemberId ? <section className="live-card join-card"><span className="result-icon"><UsersRound /></span><h2>친구들과 여행을 준비해요</h2><p>연락처 없이 별명만 입력하면 참여할 수 있어요.</p><label>내 별명<input maxLength={20} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void join()} placeholder="예: 민지" /></label><button className="primary-button" disabled={!name.trim() || joining} onClick={join}>{joining ? '참여하는 중…' : '여행방 참여하기'} <ArrowRight size={18} /></button></section> : <>
+        <section className="live-card invite-card"><div><b>친구 초대 링크</b><span>인증정보가 포함되지 않은 안전한 링크예요.</span></div><button onClick={copyInvite}>{copied ? <Check size={16} /> : <Copy size={16} />}{copied ? '복사됨' : '링크 복사'}</button></section>
+        <section className="live-section"><div className="section-title-row"><h3>함께 가는 친구</h3><span className="count-badge">{snapshot.members.length}/{snapshot.room.expectedMembers}</span></div><div className="member-list">{snapshot.members.map((member) => <div className="member-row" key={member.id}><Avatar member={member} /><div className="member-info"><b>{member.name}{member.id === snapshot.requesterMemberId && <small>나</small>}</b><span>{member.preferenceComplete ? '취향 입력 완료' : '취향 입력 대기 중'}</span></div><span className={member.preferenceComplete ? 'complete-badge' : 'waiting-badge'}>{member.preferenceComplete ? <><Check size={13} /> 완료</> : '대기'}</span></div>)}</div>{!allJoined && <div className="lock-note"><UsersRound size={18} /><div><b>{snapshot.room.expectedMembers - snapshot.members.length}명을 더 기다리고 있어요</b><span>위 초대 링크를 친구에게 보내 주세요.</span></div></div>}</section>
+
+        {requester && !requester.preferenceComplete && <section className="live-card live-preferences"><div className="section-heading"><h2>{requester.name}님의 여행 취향</h2><p>가장 중요한 테마를 최대 3개 골라 주세요.</p></div><PreferenceGroup title="가장 하고 싶은 것" options={themes} selected={preference.themes} onSelect={toggleTheme} icons /><PreferenceGroup title="여행 속도" options={paces} selected={[preference.pace]} onSelect={(value) => setPreference((current) => ({ ...current, pace: value }))} /><PreferenceGroup title="좋아하는 음식" options={foods} selected={[preference.food]} onSelect={(value) => setPreference((current) => ({ ...current, food: value }))} /><PreferenceGroup title="원하는 분위기" options={moods} selected={[preference.mood]} onSelect={(value) => setPreference((current) => ({ ...current, mood: value }))} /><label className="constraint-field">알레르기·꼭 피해야 하는 것<span>선택</span><input value={preference.constraint} onChange={(event) => setPreference((current) => ({ ...current, constraint: event.target.value }))} placeholder="예: 견과류 알레르기" /></label><button className="primary-button" disabled={preference.themes.length === 0 || saving} onClick={savePreference}>{saving ? '저장 중…' : '취향 저장하기'} <Check size={18} /></button></section>}
+
+        {!allReady && requester?.preferenceComplete && <div className="lock-note live-wait"><Sparkles size={18} /><div><b>모두의 취향을 기다리는 중이에요</b><span>모든 인원이 참여하고 입력하면 추천 코스가 공개됩니다.</span></div></div>}
+
+        {allReady && !finalCourse && <section className="live-section"><div className="section-heading"><h2>{snapshot.room.voteRound === 2 ? '공동 1위 결선투표' : '우리에게 맞는 코스 3가지'}</h2><p>{snapshot.room.voteRound === 2 ? '동률인 코스 중 하나를 다시 골라 주세요.' : '실제 부산 장소를 바탕으로 취향 일치 순서를 계산했어요.'}</p></div><div className="live-course-list">{availableCourses.map((course) => <div key={course.id}><CourseCard course={course} expanded={false} onToggle={() => undefined} />{!snapshot.hasVoted && <button className={`live-vote-choice ${selectedCourseId === course.id ? 'selected' : ''}`} onClick={() => setSelectedCourseId(course.id)}>{selectedCourseId === course.id && <Check size={15} />} 이 코스에 투표</button>}</div>)}</div>{snapshot.hasVoted && !snapshot.allVoted && <div className="lock-note"><Vote size={18} /><div><b>내 투표를 저장했어요</b><span>모두 투표할 때까지 선택은 공개되지 않습니다.</span></div></div>}{!snapshot.hasVoted && <button className="primary-button sticky-action" disabled={!selectedCourseId || working} onClick={vote}>익명 투표 보내기 <Vote size={18} /></button>}{snapshot.allVoted && <><div className="result-list">{availableCourses.map((course) => <div key={course.id}><span>{course.emoji}</span><div><b>{course.title}</b><div className="vote-bar"><i style={{ width: `${((voteCounts[course.id] ?? 0) / snapshot.members.length) * 100}%` }} /></div></div><strong>{voteCounts[course.id] ?? 0}표</strong></div>)}</div><button className="primary-button sticky-action" disabled={working} onClick={resolve}>{snapshot.room.voteRound === 1 ? '결과 확인하기' : '최종 코스 확정하기'} <ArrowRight size={18} /></button></>}</section>}
+
+        {finalCourse && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.destination} · 취향 일치 {finalCourse.match}%</p></div><div className="day-switch"><button className={finalDay === 0 ? 'active' : ''} onClick={() => setFinalDay(0)}>DAY 1</button><button className={finalDay === 1 ? 'active' : ''} onClick={() => setFinalDay(1)}>DAY 2</button></div><Timeline stops={finalCourse.days[finalDay]} /><RouteMap stops={finalCourse.days[finalDay]} /></section>}
+      </>}
+    </main>
+  </div>
+}
+
 function HomeScreen() {
   const [interest, setInterest] = useState<'yes' | 'not-yet' | null>(() => {
     if (typeof localStorage === 'undefined') return null
@@ -139,6 +261,21 @@ function HomeScreen() {
 
 function CreateTrip({ state, setState }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const setTrip = (field: string, value: string) => setState((s) => ({ ...s, trip: { ...s.trip, [field]: value } }))
+  const [hostName, setHostName] = useState('민지')
+  const [expectedMembers, setExpectedMembers] = useState(4)
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState('')
+  const createRoom = async () => {
+    setCreating(true); setError('')
+    try {
+      const result = await createLiveRoom(state.trip, hostName, expectedMembers)
+      saveRoomToken(result.roomId, result.token)
+      window.location.assign(`/demo?room=${result.roomId}`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '여행방을 만들지 못했습니다.')
+      setCreating(false)
+    }
+  }
   return (
     <section className="page">
       <Progress current={1} total={4} label="여행 기본 정보" />
@@ -162,8 +299,16 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
             {['대중교통', '자동차'].map((item) => <button className={state.trip.transport === item ? 'active' : ''} onClick={() => setTrip('transport', item)} key={item}>{item === '대중교통' ? <TrainFront size={17} /> : <Compass size={17} />}{item}</button>)}
           </div>
         </label>
+        <label>내 별명<input maxLength={20} value={hostName} onChange={(e) => setHostName(e.target.value)} /></label>
+        <label>함께 갈 인원
+          <div className="segmented member-count">
+            {[2, 3, 4, 5, 6].map((count) => <button type="button" className={expectedMembers === count ? 'active' : ''} onClick={() => setExpectedMembers(count)} key={count}>{count}명</button>)}
+          </div>
+        </label>
+        <div className="expiry-notice"><Clock3 size={16} /><span>여행방과 익명 참여 데이터는 생성 7일 후 자동 만료됩니다.</span></div>
       </div>
-      <button className="primary-button sticky-action" disabled={!state.trip.origin || !state.trip.destination} onClick={() => setState((s) => ({ ...s, step: 'room' }))}>여행방 만들기 <ArrowRight size={18} /></button>
+      {error && <div className="form-error" role="alert">{error}</div>}
+      <button className="primary-button sticky-action" disabled={creating || !state.trip.origin || !state.trip.destination || !hostName.trim()} onClick={createRoom}>{creating ? '여행방 만드는 중…' : '7일 여행방 만들기'} <ArrowRight size={18} /></button>
     </section>
   )
 }

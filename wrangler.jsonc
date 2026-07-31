@@ -16,6 +16,17 @@
   "images": {
     "binding": "IMAGES"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "moyeo-db",
+      "database_id": "bc01a8d6-5e99-450c-8549-cb2d8ebd7c57",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": {
+    "crons": ["17 3 * * *"]
+  },
   "vars": {
     "DATA_REGION": "BUSAN"
   }
