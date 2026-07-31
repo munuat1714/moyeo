@@ -1,3 +1,6 @@
+import { generateRouteCourses } from './recommendations';
+import type { SearchCredentials } from './recommendations';
+
 export const ROOM_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const roomExpiresAt = (createdAt: number) => createdAt + ROOM_TTL_SECONDS;
 const COLORS = ['#ff6b4a', '#3f7cff', '#9b6bdf', '#18a778', '#e69524', '#d24b78'];
@@ -129,6 +132,12 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
   const member = await requester(db, roomId, request);
   if (!member) return json({ error: '이 여행방의 참여자 인증이 필요합니다.' }, 401);
 
+  if (!action && request.method === 'DELETE') {
+    if (!member.is_host) return json({ error: '여행방은 방장만 삭제할 수 있습니다.' }, 403);
+    await db.prepare('DELETE FROM rooms WHERE id = ?1').bind(roomId).run();
+    return json({ ok: true });
+  }
+
   if (action === 'recommendations' && request.method === 'GET') {
     if (room.recommendation_json) return json({ courses: JSON.parse(room.recommendation_json) });
     const members = await db.prepare('SELECT preference_json FROM members WHERE room_id = ?1').bind(roomId).all<{ preference_json: string | null }>();
@@ -186,5 +195,3 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
 export async function deleteExpiredRooms(db: D1Database) {
   await db.prepare('DELETE FROM rooms WHERE expires_at <= ?1').bind(Math.floor(Date.now() / 1000)).run();
 }
-import { generateRouteCourses } from './recommendations';
-import type { SearchCredentials } from './recommendations';

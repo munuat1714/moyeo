@@ -31,6 +31,10 @@ export function saveRoomToken(roomId: string, token: string) {
   localStorage.setItem(tokenKey(roomId), token)
 }
 
+export function clearRoomToken(roomId: string) {
+  localStorage.removeItem(tokenKey(roomId))
+}
+
 async function request<T>(path: string, init: RequestInit = {}, roomId?: string): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body) headers.set('Content-Type', 'application/json')
@@ -52,6 +56,10 @@ export async function createLiveRoom(trip: Trip, hostName: string, expectedMembe
 
 export function fetchLiveRoom(roomId: string) {
   return request<LiveSnapshot>(`/api/rooms/${roomId}`, {}, roomId)
+}
+
+export function deleteLiveRoom(roomId: string) {
+  return request<{ ok: true }>(`/api/rooms/${roomId}`, { method: 'DELETE' }, roomId)
 }
 
 export function joinLiveRoom(roomId: string, name: string) {

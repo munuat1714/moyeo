@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { courses, demoPreferences, foods, initialState, moods, paces, themes } from './data'
 import { aggregateThemes, allPreferencesComplete, formatPrice, recommendCourses, tallyVotes } from './logic'
-import { createLiveRoom, fetchLiveRecommendations, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLivePreference, saveRoomToken, submitLiveVote } from './live'
+import { clearRoomToken, createLiveRoom, deleteLiveRoom, fetchLiveRecommendations, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLivePreference, saveRoomToken, submitLiveVote } from './live'
 import type { LiveSnapshot } from './live'
 import type { AppState, Course, Preference, Stop } from './types'
 import './styles.css'
@@ -115,6 +115,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
   const [routeCourses, setRouteCourses] = useState<Course[] | null>(null)
   const [recommendationLoading, setRecommendationLoading] = useState(false)
   const [recommendationError, setRecommendationError] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   const refresh = async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -191,6 +192,19 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
     setCopied(true); window.setTimeout(() => setCopied(false), 1600)
   }
 
+  const removeRoom = async () => {
+    if (!window.confirm('이 여행방을 삭제할까요? 참여자 취향과 투표도 모두 삭제되며 복구할 수 없습니다.')) return
+    setDeleting(true); setError('')
+    try {
+      await deleteLiveRoom(roomId)
+      clearRoomToken(roomId)
+      window.location.assign('/demo')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '여행방을 삭제하지 못했습니다.')
+      setDeleting(false)
+    }
+  }
+
   const vote = async () => {
     if (!selectedCourseId) return
     setWorking(true); setError('')
@@ -221,6 +235,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
 
       {!snapshot.requesterMemberId ? <section className="live-card join-card"><span className="result-icon"><UsersRound /></span><h2>친구들과 여행을 준비해요</h2><p>연락처 없이 별명만 입력하면 참여할 수 있어요.</p><label>내 별명<input maxLength={20} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void join()} placeholder="예: 민지" /></label><button className="primary-button" disabled={!name.trim() || joining} onClick={join}>{joining ? '참여하는 중…' : '여행방 참여하기'} <ArrowRight size={18} /></button></section> : <>
         <section className="live-card invite-card"><div><b>친구 초대 링크</b><span>인증정보가 포함되지 않은 안전한 링크예요.</span></div><button onClick={copyInvite}>{copied ? <Check size={16} /> : <Copy size={16} />}{copied ? '복사됨' : '링크 복사'}</button></section>
+        <section className="room-management" aria-label="여행방 관리"><a href="/demo"><RotateCcw size={16} /> 새 여행방 만들기</a>{requester?.host && <button disabled={deleting} onClick={removeRoom}><Trash2 size={16} /> {deleting ? '삭제 중…' : '현재 여행방 삭제'}</button>}</section>
         <section className="live-section"><div className="section-title-row"><h3>함께 가는 친구</h3><span className="count-badge">{snapshot.members.length}/{snapshot.room.expectedMembers}</span></div><div className="member-list">{snapshot.members.map((member) => <div className="member-row" key={member.id}><Avatar member={member} /><div className="member-info"><b>{member.name}{member.id === snapshot.requesterMemberId && <small>나</small>}</b><span>{member.preferenceComplete ? '취향 입력 완료' : '취향 입력 대기 중'}</span></div><span className={member.preferenceComplete ? 'complete-badge' : 'waiting-badge'}>{member.preferenceComplete ? <><Check size={13} /> 완료</> : '대기'}</span></div>)}</div>{!allJoined && <div className="lock-note"><UsersRound size={18} /><div><b>{snapshot.room.expectedMembers - snapshot.members.length}명을 더 기다리고 있어요</b><span>위 초대 링크를 친구에게 보내 주세요.</span></div></div>}</section>
 
         {requester && !requester.preferenceComplete && <section className="live-card live-preferences"><div className="section-heading"><h2>{requester.name}님의 여행 취향</h2><p>가장 중요한 테마를 최대 3개 골라 주세요.</p></div><PreferenceGroup title="가장 하고 싶은 것" options={themes} selected={preference.themes} onSelect={toggleTheme} icons /><PreferenceGroup title="여행 속도" options={paces} selected={[preference.pace]} onSelect={(value) => setPreference((current) => ({ ...current, pace: value }))} /><PreferenceGroup title="좋아하는 음식" options={foods} selected={[preference.food]} onSelect={(value) => setPreference((current) => ({ ...current, food: value }))} /><PreferenceGroup title="원하는 분위기" options={moods} selected={[preference.mood]} onSelect={(value) => setPreference((current) => ({ ...current, mood: value }))} /><label className="constraint-field">알레르기·꼭 피해야 하는 것<span>선택</span><input value={preference.constraint} onChange={(event) => setPreference((current) => ({ ...current, constraint: event.target.value }))} placeholder="예: 견과류 알레르기" /></label><button className="primary-button" disabled={preference.themes.length === 0 || saving} onClick={savePreference}>{saving ? '저장 중…' : '취향 저장하기'} <Check size={18} /></button></section>}
