@@ -44,10 +44,9 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
   const [liveRoomId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('room') ?? '')
   if (liveRoomId) return <LiveRoomApp roomId={liveRoomId} />
   const isDemo = mode === 'demo'
-  const [state, setState] = useState<AppState>(() => ({
-    ...loadState(),
-    step: isDemo ? 'room' : 'home',
-  }))
+  const [state, setState] = useState<AppState>(() => isDemo
+    ? { ...initialState, trip: { ...initialState.trip }, members: initialState.members.map((member) => ({ ...member })), step: 'create' }
+    : { ...loadState(), step: 'home' })
   const [selectedCourseId, setSelectedCourseId] = useState(courses[0].id)
   const [finalTab, setFinalTab] = useState<'schedule' | 'map' | 'booking'>('schedule')
   const recommendedCourses = useMemo(() => recommendCourses(courses, state.members), [state.members])
@@ -59,7 +58,7 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
   const update = (patch: Partial<AppState>) => setState((current) => ({ ...current, ...patch }))
   const reset = () => {
     localStorage.removeItem(STORAGE_KEY)
-    setState({ ...initialState, step: isDemo ? 'room' : 'home' })
+    setState({ ...initialState, trip: { ...initialState.trip }, members: initialState.members.map((member) => ({ ...member })), step: isDemo ? 'create' : 'home' })
     setSelectedCourseId(courses[0].id)
   }
 
