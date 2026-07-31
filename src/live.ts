@@ -1,4 +1,4 @@
-import type { Member, Preference, Trip } from './types'
+import type { Course, Member, Preference, Trip } from './types'
 
 export type LiveRoom = Trip & {
   id: string
@@ -64,6 +64,10 @@ export function saveLivePreference(roomId: string, preference: Preference) {
   return request<{ ok: true }>(`/api/rooms/${roomId}/preferences`, {
     method: 'PUT', body: JSON.stringify({ preference }),
   }, roomId)
+}
+
+export function fetchLiveRecommendations(roomId: string) {
+  return request<{ courses: Course[] }>(`/api/rooms/${roomId}/recommendations`, {}, roomId)
 }
 
 export function submitLiveVote(roomId: string, courseId: string) {

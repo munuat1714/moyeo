@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { courses, demoPreferences, foods, initialState, moods, paces, themes } from './data'
 import { aggregateThemes, allPreferencesComplete, formatPrice, recommendCourses, tallyVotes } from './logic'
-import { createLiveRoom, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLivePreference, saveRoomToken, submitLiveVote } from './live'
+import { createLiveRoom, fetchLiveRecommendations, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLivePreference, saveRoomToken, submitLiveVote } from './live'
 import type { LiveSnapshot } from './live'
 import type { AppState, Course, Preference, Stop } from './types'
 import './styles.css'
@@ -112,6 +112,9 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
   const [selectedCourseId, setSelectedCourseId] = useState('')
   const [working, setWorking] = useState(false)
   const [finalDay, setFinalDay] = useState(0)
+  const [routeCourses, setRouteCourses] = useState<Course[] | null>(null)
+  const [recommendationLoading, setRecommendationLoading] = useState(false)
+  const [recommendationError, setRecommendationError] = useState('')
 
   const refresh = async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -135,11 +138,25 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
   const requester = snapshot?.members.find((member) => member.id === snapshot.requesterMemberId)
   const allJoined = Boolean(snapshot && snapshot.members.length === snapshot.room.expectedMembers)
   const allReady = Boolean(snapshot && allJoined && snapshot.members.every((member) => member.preferenceComplete))
-  const recommended = useMemo(() => snapshot ? recommendCourses(courses, snapshot.members) : courses, [snapshot])
+  const recommended = useMemo(() => snapshot && routeCourses ? recommendCourses(routeCourses, snapshot.members) : [], [routeCourses, snapshot])
   const availableCourses = snapshot?.room.voteRound === 2
     ? recommended.filter((course) => snapshot.room.runoffCourseIds.includes(course.id))
     : recommended
   const finalCourse = recommended.find((course) => course.id === snapshot?.room.finalCourseId)
+
+  const loadRecommendations = async () => {
+    setRecommendationLoading(true); setRecommendationError('')
+    try {
+      const result = await fetchLiveRecommendations(roomId)
+      setRouteCourses(result.courses)
+    } catch (reason) {
+      setRecommendationError(reason instanceof Error ? reason.message : '경로 주변 추천을 만들지 못했습니다.')
+    } finally { setRecommendationLoading(false) }
+  }
+
+  useEffect(() => {
+    if (allReady && snapshot?.requesterMemberId && !routeCourses && !recommendationLoading && !recommendationError) void loadRecommendations()
+  }, [allReady, snapshot?.requesterMemberId, routeCourses, recommendationLoading, recommendationError])
 
   const join = async () => {
     if (!name.trim()) return
@@ -210,7 +227,9 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
 
         {!allReady && requester?.preferenceComplete && <div className="lock-note live-wait"><Sparkles size={18} /><div><b>모두의 취향을 기다리는 중이에요</b><span>모든 인원이 참여하고 입력하면 추천 코스가 공개됩니다.</span></div></div>}
 
-        {allReady && !finalCourse && <section className="live-section"><div className="section-heading"><h2>{snapshot.room.voteRound === 2 ? '공동 1위 결선투표' : '우리에게 맞는 코스 3가지'}</h2><p>{snapshot.room.voteRound === 2 ? '동률인 코스 중 하나를 다시 골라 주세요.' : '실제 부산 장소를 바탕으로 취향 일치 순서를 계산했어요.'}</p></div><div className="live-course-list">{availableCourses.map((course) => <div key={course.id}><CourseCard course={course} expanded={false} onToggle={() => undefined} />{!snapshot.hasVoted && <button className={`live-vote-choice ${selectedCourseId === course.id ? 'selected' : ''}`} onClick={() => setSelectedCourseId(course.id)}>{selectedCourseId === course.id && <Check size={15} />} 이 코스에 투표</button>}</div>)}</div>{snapshot.hasVoted && !snapshot.allVoted && <div className="lock-note"><Vote size={18} /><div><b>내 투표를 저장했어요</b><span>모두 투표할 때까지 선택은 공개되지 않습니다.</span></div></div>}{!snapshot.hasVoted && <button className="primary-button sticky-action" disabled={!selectedCourseId || working} onClick={vote}>익명 투표 보내기 <Vote size={18} /></button>}{snapshot.allVoted && <><div className="result-list">{availableCourses.map((course) => <div key={course.id}><span>{course.emoji}</span><div><b>{course.title}</b><div className="vote-bar"><i style={{ width: `${((voteCounts[course.id] ?? 0) / snapshot.members.length) * 100}%` }} /></div></div><strong>{voteCounts[course.id] ?? 0}표</strong></div>)}</div><button className="primary-button sticky-action" disabled={working} onClick={resolve}>{snapshot.room.voteRound === 1 ? '결과 확인하기' : '최종 코스 확정하기'} <ArrowRight size={18} /></button></>}</section>}
+        {allReady && recommendationLoading && <div className="lock-note live-wait"><Sparkles size={18} /><div><b>{snapshot.room.origin} → {snapshot.room.destination} 주변을 찾고 있어요</b><span>실제 장소 좌표와 이동 거리를 비교해 가까운 코스를 구성합니다.</span></div></div>}
+        {allReady && recommendationError && <div className="live-card recommendation-error"><b>경로 기반 추천을 만들지 못했어요</b><span>{recommendationError}</span><button className="secondary-button" onClick={() => { setRecommendationError(''); void loadRecommendations() }}>다시 추천하기</button></div>}
+        {allReady && routeCourses && !finalCourse && <section className="live-section"><div className="section-heading"><h2>{snapshot.room.voteRound === 2 ? '공동 1위 결선투표' : '우리 경로에 맞는 코스 3가지'}</h2><p>{snapshot.room.voteRound === 2 ? '동률인 코스 중 하나를 다시 골라 주세요.' : `${snapshot.room.origin}에서 ${snapshot.room.destination}까지 가까운 실제 장소를 우선했어요.`}</p></div><div className="live-course-list">{availableCourses.map((course) => <div key={course.id}><CourseCard course={course} expanded={false} onToggle={() => undefined} />{!snapshot.hasVoted && <button className={`live-vote-choice ${selectedCourseId === course.id ? 'selected' : ''}`} onClick={() => setSelectedCourseId(course.id)}>{selectedCourseId === course.id && <Check size={15} />} 이 코스에 투표</button>}</div>)}</div>{snapshot.hasVoted && !snapshot.allVoted && <div className="lock-note"><Vote size={18} /><div><b>내 투표를 저장했어요</b><span>모두 투표할 때까지 선택은 공개되지 않습니다.</span></div></div>}{!snapshot.hasVoted && <button className="primary-button sticky-action" disabled={!selectedCourseId || working} onClick={vote}>익명 투표 보내기 <Vote size={18} /></button>}{snapshot.allVoted && <><div className="result-list">{availableCourses.map((course) => <div key={course.id}><span>{course.emoji}</span><div><b>{course.title}</b><div className="vote-bar"><i style={{ width: `${((voteCounts[course.id] ?? 0) / snapshot.members.length) * 100}%` }} /></div></div><strong>{voteCounts[course.id] ?? 0}표</strong></div>)}</div><button className="primary-button sticky-action" disabled={working} onClick={resolve}>{snapshot.room.voteRound === 1 ? '결과 확인하기' : '최종 코스 확정하기'} <ArrowRight size={18} /></button></>}</section>}
 
         {finalCourse && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.destination} · 취향 일치 {finalCourse.match}%</p></div><div className="day-switch"><button className={finalDay === 0 ? 'active' : ''} onClick={() => setFinalDay(0)}>DAY 1</button><button className={finalDay === 1 ? 'active' : ''} onClick={() => setFinalDay(1)}>DAY 2</button></div><Timeline stops={finalCourse.days[finalDay]} /><RouteMap stops={finalCourse.days[finalDay]} /></section>}
       </>}

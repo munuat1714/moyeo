@@ -5,7 +5,7 @@ const COLORS = ['#ff6b4a', '#3f7cff', '#9b6bdf', '#18a778', '#e69524', '#d24b78'
 type RoomRow = {
   id: string; name: string; origin: string; destination: string; start_date: string; end_date: string;
   transport: string; stay: string; expected_members: number; vote_round: number; runoff_course_ids: string;
-  final_course_id: string | null; created_at: number; expires_at: number;
+  final_course_id: string | null; recommendation_json: string | null; created_at: number; expires_at: number;
 };
 
 type MemberRow = {
@@ -82,7 +82,7 @@ async function roomSnapshot(db: D1Database, room: RoomRow, request: Request) {
   };
 }
 
-export async function handleRoomApi(request: Request, db: D1Database, url: URL): Promise<Response | null> {
+export async function handleRoomApi(request: Request, db: D1Database, url: URL, searchCredentials: SearchCredentials): Promise<Response | null> {
   if (url.pathname === '/api/rooms' && request.method === 'POST') {
     const body = await readBody(request);
     if (!body) return json({ error: '요청 형식을 확인해 주세요.' }, 400);
@@ -102,7 +102,7 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL):
     return json({ roomId, memberId, token, expiresAt }, 201);
   }
 
-  const match = url.pathname.match(/^\/api\/rooms\/([a-z0-9]+)(?:\/(members|preferences|votes|resolve))?$/);
+  const match = url.pathname.match(/^\/api\/rooms\/([a-z0-9]+)(?:\/(members|preferences|recommendations|votes|resolve))?$/);
   if (!match) return null;
   const [, roomId, action] = match;
   const found = await activeRoom(db, roomId);
@@ -128,6 +128,24 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL):
 
   const member = await requester(db, roomId, request);
   if (!member) return json({ error: '이 여행방의 참여자 인증이 필요합니다.' }, 401);
+
+  if (action === 'recommendations' && request.method === 'GET') {
+    if (room.recommendation_json) return json({ courses: JSON.parse(room.recommendation_json) });
+    const members = await db.prepare('SELECT preference_json FROM members WHERE room_id = ?1').bind(roomId).all<{ preference_json: string | null }>();
+    if (members.results.length !== room.expected_members || members.results.some((item) => !item.preference_json)) {
+      return json({ error: '모든 참여자가 취향을 입력한 뒤 추천을 만들 수 있습니다.' }, 409);
+    }
+    try {
+      const courses = await generateRouteCourses(room.origin, room.destination, searchCredentials);
+      const encoded = JSON.stringify(courses);
+      await db.prepare('UPDATE rooms SET recommendation_json = ?1 WHERE id = ?2 AND recommendation_json IS NULL').bind(encoded, roomId).run();
+      const saved = await db.prepare('SELECT recommendation_json FROM rooms WHERE id = ?1').bind(roomId).first<{ recommendation_json: string }>();
+      return json({ courses: JSON.parse(saved?.recommendation_json ?? encoded) });
+    } catch (reason) {
+      console.error('route-recommendation-failed', reason);
+      return json({ error: reason instanceof Error ? reason.message : '경로 주변 추천을 만들지 못했습니다.' }, 502);
+    }
+  }
 
   if (action === 'preferences' && request.method === 'PUT') {
     const body = await readBody(request), preference = body?.preference;
@@ -168,3 +186,5 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL):
 export async function deleteExpiredRooms(db: D1Database) {
   await db.prepare('DELETE FROM rooms WHERE expires_at <= ?1').bind(Math.floor(Date.now() / 1000)).run();
 }
+import { generateRouteCourses } from './recommendations';
+import type { SearchCredentials } from './recommendations';

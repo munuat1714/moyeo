@@ -42,7 +42,10 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname.startsWith('/api/rooms')) {
-      const roomResponse = await handleRoomApi(request, env.DB, url);
+      const roomResponse = await handleRoomApi(request, env.DB, url, {
+        clientId: env.NAVER_SEARCH_CLIENT_ID,
+        clientSecret: env.NAVER_SEARCH_CLIENT_SECRET,
+      });
       if (roomResponse) return roomResponse;
     }
 
