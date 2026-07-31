@@ -80,6 +80,9 @@ label { display: grid; gap: 8px; font-size: 13px; font-weight: 700; color: #525a
 input { width: 100%; border: 1px solid var(--line); background: white; padding: 14px; min-height: 50px; border-radius: 13px; outline: none; color: var(--ink); }
 input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,79,.1); }
 .field-row { display: grid; grid-template-columns: 1fr 25px 1fr; gap: 5px; align-items: end; }.field-row.dates { grid-template-columns: 1fr 1fr; gap: 10px; }.field-arrow { margin-bottom: 15px; color: #aaa; }
+.route-input-heading { margin-bottom: -10px; display: flex; align-items: center; justify-content: space-between; color: #525a51; font-size: 13px; }
+.route-input-heading button { padding: 5px 7px; color: var(--green); border-radius: 7px; background: var(--green-soft); font-size: 10px; font-weight: 800; }
+.route-data-note { margin-top: -10px; color: var(--muted); font-size: 9px; line-height: 1.5; }
 .segmented { background: #e8ebe4; border-radius: 14px; padding: 4px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .segmented button { min-height: 43px; border-radius: 10px; background: transparent; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 700; }
 .segmented button.active { background: white; color: var(--green); box-shadow: 0 3px 10px #1f2e2215; }

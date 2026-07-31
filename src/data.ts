@@ -16,8 +16,8 @@ export const initialState: AppState = {
   step: 'home',
   trip: {
     name: '우리들의 부산 한바퀴',
-    origin: '부산역',
-    destination: '부산',
+    origin: '',
+    destination: '',
     startDate: '2026-08-15',
     endDate: '2026-08-16',
     transport: '대중교통',

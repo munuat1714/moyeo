@@ -279,16 +279,18 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
     <section className="page">
       <Progress current={1} total={4} label="여행 기본 정보" />
       <div className="section-heading">
-        <h2>어디로 떠날까요?</h2>
-        <p>목적지는 직접 정하고, 세부 코스는 함께 골라요.</p>
+        <h2>어디서 어디로 떠날까요?</h2>
+        <p>출발 장소와 도착 장소를 직접 입력해 주세요.</p>
       </div>
       <div className="form-card">
         <label>여행방 이름<input value={state.trip.name} onChange={(e) => setTrip('name', e.target.value)} /></label>
-        <div className="field-row">
-          <label>출발지<input value={state.trip.origin} onChange={(e) => setTrip('origin', e.target.value)} /></label>
+        <div className="route-input-heading"><b>여행 경로</b><button type="button" onClick={() => { setTrip('origin', ''); setTrip('destination', '') }}>입력 지우기</button></div>
+        <div className="field-row route-fields">
+          <label>출발 장소<input type="text" autoComplete="off" placeholder="예: 부산역" value={state.trip.origin} onChange={(e) => setTrip('origin', e.target.value)} /></label>
           <ArrowRight size={19} className="field-arrow" />
-          <label>목적지<input value={state.trip.destination} onChange={(e) => setTrip('destination', e.target.value)} /></label>
+          <label>도착 장소<input type="text" autoComplete="off" placeholder="예: 해운대" value={state.trip.destination} onChange={(e) => setTrip('destination', e.target.value)} /></label>
         </div>
+        <small className="route-data-note">현재 추천 코스와 장소 데이터는 부산 지역을 기준으로 제공됩니다.</small>
         <div className="field-row dates">
           <label>가는 날<input type="date" value={state.trip.startDate} onChange={(e) => setTrip('startDate', e.target.value)} /></label>
           <label>오는 날<input type="date" value={state.trip.endDate} onChange={(e) => setTrip('endDate', e.target.value)} /></label>
@@ -304,10 +306,10 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
             {[2, 3, 4, 5, 6].map((count) => <button type="button" className={expectedMembers === count ? 'active' : ''} onClick={() => setExpectedMembers(count)} key={count}>{count}명</button>)}
           </div>
         </label>
-        <div className="expiry-notice"><Clock3 size={16} /><span>여행방과 익명 참여 데이터는 생성 7일 후 자동 만료됩니다.</span></div>
+        <div className="expiry-notice"><Clock3 size={16} /><span>여행방과 별명·취향·투표 데이터는 생성일로부터 <b>7일 후 자동 삭제</b>됩니다.</span></div>
       </div>
       {error && <div className="form-error" role="alert">{error}</div>}
-      <button className="primary-button sticky-action" disabled={creating || !state.trip.origin || !state.trip.destination || !hostName.trim()} onClick={createRoom}>{creating ? '여행방 만드는 중…' : '7일 여행방 만들기'} <ArrowRight size={18} /></button>
+      <button className="primary-button sticky-action" disabled={creating || !state.trip.origin.trim() || !state.trip.destination.trim() || !hostName.trim()} onClick={createRoom}>{creating ? '여행방 만드는 중…' : '여행방 만들기'} <ArrowRight size={18} /></button>
     </section>
   )
 }
