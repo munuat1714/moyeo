@@ -30,6 +30,8 @@ PowerShell 실행 정책으로 `npm.ps1`이 차단되는 환경에서는 `npm.cm
 
 초기 서비스는 네이버 Directions를 호출하지 않아 불필요한 과금을 피합니다. 네이버 Maps의 무료 이용량은 대표 계정 등 조건이 있으므로 콘솔에서 사용량 제한과 알림을 먼저 설정하세요.
 
+이 프로젝트의 배포 대상은 Cloudflare의 `Mirror Erigeron` 계정에 있는 `moyeo` Worker입니다. `wrangler.jsonc`의 `account_id`도 해당 계정으로 고정되어 있으므로, Variables and Secrets와 배포 설정은 반드시 이 계정에서 관리합니다.
+
 Cloudflare Worker의 Variables and Secrets에 다음 값을 등록합니다.
 
 ```text
