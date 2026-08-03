@@ -8,7 +8,7 @@ const COLORS = ['#ff6b4a', '#3f7cff', '#9b6bdf', '#18a778', '#e69524', '#d24b78'
 type RoomRow = {
   id: string; name: string; origin: string; destination: string; start_date: string; end_date: string;
   transport: string; stay: string; expected_members: number; vote_round: number; runoff_course_ids: string;
-  final_course_id: string | null; recommendation_json: string | null; created_at: number; expires_at: number;
+  final_course_id: string | null; recommendation_json: string | null; itinerary_json: string | null; created_at: number; expires_at: number;
 };
 
 type MemberRow = {
@@ -105,7 +105,7 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
     return json({ roomId, memberId, token, expiresAt }, 201);
   }
 
-  const match = url.pathname.match(/^\/api\/rooms\/([a-z0-9]+)(?:\/(members|preferences|recommendations|votes|resolve))?$/);
+  const match = url.pathname.match(/^\/api\/rooms\/([a-z0-9]+)(?:\/(members|preferences|recommendations|itinerary|votes|resolve))?$/);
   if (!match) return null;
   const [, roomId, action] = match;
   const found = await activeRoom(db, roomId);
@@ -154,6 +154,28 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
       console.error('route-recommendation-failed', reason);
       return json({ error: reason instanceof Error ? reason.message : '경로 주변 추천을 만들지 못했습니다.' }, 502);
     }
+  }
+
+  if (action === 'itinerary' && request.method === 'GET') {
+    if (!room.final_course_id || !room.recommendation_json) return json({ error: '최종 코스를 먼저 확정해 주세요.' }, 409);
+    if (room.itinerary_json) return json({ days: JSON.parse(room.itinerary_json) });
+    const courses = JSON.parse(room.recommendation_json) as Array<{ id: string; days: unknown[][] }>;
+    const course = courses.find((item) => item.id === room.final_course_id);
+    if (!course) return json({ error: '확정된 코스 일정을 찾지 못했습니다.' }, 404);
+    return json({ days: course.days });
+  }
+
+  if (action === 'itinerary' && request.method === 'PUT') {
+    if (!member.is_host) return json({ error: '최종 경로는 방장만 수정할 수 있습니다.' }, 403);
+    if (!room.final_course_id) return json({ error: '최종 코스를 먼저 확정해 주세요.' }, 409);
+    const body = await readBody(request), days = body?.days;
+    if (!Array.isArray(days) || days.length < 1 || days.length > 7 || days.some((day) => !Array.isArray(day) || day.length < 1 || day.length > 20)) {
+      return json({ error: '일정 형식을 확인해 주세요.' }, 400);
+    }
+    const encoded = JSON.stringify(days);
+    if (encoded.length > 100_000) return json({ error: '일정 정보가 너무 깁니다.' }, 400);
+    await db.prepare('UPDATE rooms SET itinerary_json = ?1 WHERE id = ?2').bind(encoded, roomId).run();
+    return json({ ok: true });
   }
 
   if (action === 'preferences' && request.method === 'PUT') {

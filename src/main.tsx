@@ -3,14 +3,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
-  ArrowLeft, ArrowRight, CalendarDays, Check, ChevronRight, CircleDollarSign,
+  ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign,
   Clock3, Coffee, Compass, Copy, ExternalLink, Home, Map, MapPin, MessageCircle,
   RotateCcw, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, TrainFront, Trash2,
   UserRound, UsersRound, Utensils, Vote, WalletCards, X,
 } from 'lucide-react'
 import { courses, demoPreferences, foods, initialState, moods, paces, themes } from './data'
 import { aggregateThemes, allPreferencesComplete, formatPrice, recommendCourses, tallyVotes } from './logic'
-import { clearRoomToken, createLiveRoom, deleteLiveRoom, fetchLiveRecommendations, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLivePreference, saveRoomToken, submitLiveVote } from './live'
+import { clearRoomToken, createLiveRoom, deleteLiveRoom, fetchLiveItinerary, fetchLiveRecommendations, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLiveItinerary, saveLivePreference, saveRoomToken, submitLiveVote } from './live'
 import type { LiveSnapshot } from './live'
 import type { AppState, Course, Preference, Stop } from './types'
 import './styles.css'
@@ -116,6 +116,9 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
   const [recommendationLoading, setRecommendationLoading] = useState(false)
   const [recommendationError, setRecommendationError] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [itinerary, setItinerary] = useState<Stop[][] | null>(null)
+  const [editingStop, setEditingStop] = useState<{ day: number; index: number } | null>(null)
+  const [itinerarySaving, setItinerarySaving] = useState(false)
 
   const refresh = async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -158,6 +161,11 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
   useEffect(() => {
     if (allReady && snapshot?.requesterMemberId && !routeCourses && !recommendationLoading && !recommendationError) void loadRecommendations()
   }, [allReady, snapshot?.requesterMemberId, routeCourses, recommendationLoading, recommendationError])
+
+  useEffect(() => {
+    if (!finalCourse || itinerary) return
+    void fetchLiveItinerary(roomId).then((result) => setItinerary(result.days)).catch((reason) => setError(reason instanceof Error ? reason.message : '최종 일정을 불러오지 못했습니다.'))
+  }, [finalCourse?.id, itinerary, roomId])
 
   const join = async () => {
     if (!name.trim()) return
@@ -220,6 +228,42 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
     finally { setWorking(false) }
   }
 
+  const persistItinerary = async (next: Stop[][]) => {
+    setItinerarySaving(true); setError('')
+    try { await saveLiveItinerary(roomId, next); setItinerary(next) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : '경로를 저장하지 못했습니다.') }
+    finally { setItinerarySaving(false) }
+  }
+
+  const moveStop = (day: number, index: number, direction: -1 | 1) => {
+    const source = itinerary ?? finalCourse?.days
+    if (!source) return
+    const target = index + direction
+    if (target < 0 || target >= source[day].length) return
+    const next = source.map((items) => items.map((item) => ({ ...item })))
+    const times = next[day].map((item) => item.time)
+    ;[next[day][index], next[day][target]] = [next[day][target], next[day][index]]
+    next[day] = next[day].map((item, position) => ({ ...item, time: times[position] }))
+    setEditingStop(null)
+    void persistItinerary(next)
+  }
+
+  const replaceStop = (place: LocationSuggestion) => {
+    const source = itinerary ?? finalCourse?.days
+    if (!source || !editingStop) return
+    const next = source.map((items) => items.map((item) => ({ ...item })))
+    const current = next[editingStop.day][editingStop.index]
+    next[editingStop.day][editingStop.index] = {
+      ...current, title: place.title, category: categoryFromPlace(place.category),
+      description: `${place.category || '장소'} · ${place.roadAddress || place.address || '주소는 네이버지도에서 확인해 주세요.'}`,
+      latitude: Number(place.mapy) / 10_000_000, longitude: Number(place.mapx) / 10_000_000,
+      source: '네이버 지역검색', verifiedAt: new Date().toISOString().slice(0, 10),
+      placeUrl: `https://map.naver.com/p/search/${encodeURIComponent(place.title)}`,
+    }
+    setEditingStop(null)
+    void persistItinerary(next)
+  }
+
   if (loading) return <div className="app-shell"><main className="live-state"><Sparkles /><b>여행방을 불러오는 중이에요</b></main></div>
   if (!snapshot) return <div className="app-shell"><main className="live-state"><Clock3 /><h2>여행방을 열 수 없어요</h2><p>{error}</p><a className="primary-button" href="/demo">새 여행방 만들기</a></main></div>
 
@@ -246,7 +290,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
         {allReady && recommendationError && <div className="live-card recommendation-error"><b>경로 기반 추천을 만들지 못했어요</b><span>{recommendationError}</span><button className="secondary-button" onClick={() => { setRecommendationError(''); void loadRecommendations() }}>다시 추천하기</button></div>}
         {allReady && routeCourses && !finalCourse && <section className="live-section"><div className="section-heading"><h2>{snapshot.room.voteRound === 2 ? '공동 1위 결선투표' : '우리 경로에 맞는 코스 3가지'}</h2><p>{snapshot.room.voteRound === 2 ? '동률인 코스 중 하나를 다시 골라 주세요.' : `${snapshot.room.origin}에서 ${snapshot.room.destination}까지 가까운 실제 장소를 우선했어요.`}</p></div><div className="live-course-list">{availableCourses.map((course) => <div key={course.id}><CourseCard course={course} expanded={false} onToggle={() => undefined} />{!snapshot.hasVoted && <button className={`live-vote-choice ${selectedCourseId === course.id ? 'selected' : ''}`} onClick={() => setSelectedCourseId(course.id)}>{selectedCourseId === course.id && <Check size={15} />} 이 코스에 투표</button>}</div>)}</div>{snapshot.hasVoted && !snapshot.allVoted && <div className="lock-note"><Vote size={18} /><div><b>내 투표를 저장했어요</b><span>모두 투표할 때까지 선택은 공개되지 않습니다.</span></div></div>}{!snapshot.hasVoted && <button className="primary-button sticky-action" disabled={!selectedCourseId || working} onClick={vote}>익명 투표 보내기 <Vote size={18} /></button>}{snapshot.allVoted && <><div className="result-list">{availableCourses.map((course) => <div key={course.id}><span>{course.emoji}</span><div><b>{course.title}</b><div className="vote-bar"><i style={{ width: `${((voteCounts[course.id] ?? 0) / snapshot.members.length) * 100}%` }} /></div></div><strong>{voteCounts[course.id] ?? 0}표</strong></div>)}</div><button className="primary-button sticky-action" disabled={working} onClick={resolve}>{snapshot.room.voteRound === 1 ? '결과 확인하기' : '최종 코스 확정하기'} <ArrowRight size={18} /></button></>}</section>}
 
-        {finalCourse && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.destination} · 취향 일치 {finalCourse.match}%</p></div><div className="day-switch"><button className={finalDay === 0 ? 'active' : ''} onClick={() => setFinalDay(0)}>DAY 1</button><button className={finalDay === 1 ? 'active' : ''} onClick={() => setFinalDay(1)}>DAY 2</button></div><Timeline stops={finalCourse.days[finalDay]} /><RouteMap stops={finalCourse.days[finalDay]} /></section>}
+        {finalCourse && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.destination} · 취향 일치 {finalCourse.match}%</p></div><div className="day-switch"><button className={finalDay === 0 ? 'active' : ''} onClick={() => { setFinalDay(0); setEditingStop(null) }}>DAY 1</button><button className={finalDay === 1 ? 'active' : ''} onClick={() => { setFinalDay(1); setEditingStop(null) }}>DAY 2</button></div>{requester?.host && <div className="route-edit-notice"><Sparkles size={15} /><span>화살표로 순서를 바꾸거나 `장소 변경`으로 실제 장소를 검색할 수 있어요.{itinerarySaving ? ' 저장 중…' : ''}</span></div>}<Timeline stops={(itinerary ?? finalCourse.days)[finalDay]} onMove={requester?.host ? (index, direction) => moveStop(finalDay, index, direction) : undefined} onEdit={requester?.host ? (index) => setEditingStop({ day: finalDay, index }) : undefined} disabled={itinerarySaving} />{editingStop?.day === finalDay && <RoutePlaceEditor current={(itinerary ?? finalCourse.days)[finalDay][editingStop.index]} onCancel={() => setEditingStop(null)} onSelect={replaceStop} />}<RouteMap stops={(itinerary ?? finalCourse.days)[finalDay]} /></section>}
       </>}
     </main>
   </div>
@@ -350,7 +394,7 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
   )
 }
 
-type LocationSuggestion = { title: string; roadAddress?: string; address?: string }
+type LocationSuggestion = { title: string; category?: string; roadAddress?: string; address?: string; mapx?: string; mapy?: string }
 
 function LocationSearchField({ label, placeholder, value, onChange, selected, onSelectedChange }: {
   label: string
@@ -396,6 +440,42 @@ function LocationSearchField({ label, placeholder, value, onChange, selected, on
     {message && <small className="location-status error">{message}</small>}
     {open && items.length > 0 && <div className="location-results" role="listbox">{items.map((item, index) => <button type="button" role="option" key={`${item.title}-${index}`} onClick={() => choose(item)}><MapPin size={15} /><span><b>{item.title}</b><small>{item.roadAddress || item.address || '주소 정보 없음'}</small></span></button>)}</div>}
   </label>
+}
+
+function categoryFromPlace(category = '') {
+  if (/카페|커피|베이커리/.test(category)) return '카페'
+  if (/음식|한식|중식|일식|양식|고기/.test(category)) return '맛집'
+  if (/호텔|숙박|펜션|모텔/.test(category)) return '숙소'
+  if (/역|터미널|교통/.test(category)) return '교통'
+  if (/공원|산책|자연/.test(category)) return '산책'
+  if (/체험|레저|스포츠/.test(category)) return '액티비티'
+  return '관광'
+}
+
+function RoutePlaceEditor({ current, onSelect, onCancel }: { current: Stop; onSelect: (place: LocationSuggestion) => void; onCancel: () => void }) {
+  const [query, setQuery] = useState('')
+  const [items, setItems] = useState<LocationSuggestion[]>([])
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  useEffect(() => {
+    if (query.trim().length < 2) { setItems([]); setMessage(''); return }
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      setLoading(true); setMessage('')
+      try {
+        const response = await fetch(`/api/naver/local?query=${encodeURIComponent(`부산 ${query.trim()}`)}`, { signal: controller.signal })
+        const data = await response.json() as { items?: LocationSuggestion[]; error?: string }
+        if (!response.ok) throw new Error(data.error ?? '장소를 검색하지 못했습니다.')
+        const valid = (data.items ?? []).filter((item) => item.mapx && item.mapy)
+        setItems(valid)
+        if (!valid.length) setMessage('검색 결과가 없습니다. 정확한 상호명을 입력해 주세요.')
+      } catch (reason) {
+        if ((reason as Error).name !== 'AbortError') setMessage(reason instanceof Error ? reason.message : '장소를 검색하지 못했습니다.')
+      } finally { if (!controller.signal.aborted) setLoading(false) }
+    }, 350)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [query])
+  return <section className="route-place-editor"><div className="route-editor-title"><div><b>장소 변경</b><span>{current.title} 대신 방문할 실제 장소를 검색하세요.</span></div><button onClick={onCancel}><X size={16} /></button></div><span className="route-editor-search"><MapPin size={16} /><input autoFocus type="search" autoComplete="off" placeholder="식당·카페·숙소 이름 검색" value={query} onChange={(event) => setQuery(event.target.value)} /></span>{loading && <small>검색 중…</small>}{message && <small className="error">{message}</small>}<div className="route-editor-results">{items.map((item, index) => <button key={`${item.title}-${index}`} onClick={() => onSelect(item)}><b>{item.title}</b><span>{item.roadAddress || item.address}</span></button>)}</div></section>
 }
 
 function Room({ state, setState }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
@@ -627,9 +707,9 @@ function FinalTrip({ courses, state, setState, tab, setTab }: { courses: Course[
   )
 }
 
-function Timeline({ stops, onRemove }: { stops: Stop[]; onRemove?: (index: number) => void }) {
+function Timeline({ stops, onRemove, onMove, onEdit, disabled }: { stops: Stop[]; onRemove?: (index: number) => void; onMove?: (index: number, direction: -1 | 1) => void; onEdit?: (index: number) => void; disabled?: boolean }) {
   if (stops.length === 0) return <div className="empty-schedule"><CalendarDays size={22} /><b>이 날짜의 일정이 비었어요.</b><span>처음부터 다시 시작하면 원래 추천 일정을 불러올 수 있어요.</span></div>
-  return <div className="timeline">{stops.map((stop, index) => <div className="timeline-stop" key={stop.time + stop.title}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className="stop-card"><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><b>{stop.title}</b><p>{stop.description}</p><div className="stop-footer"><span>{stop.price === 0 ? '무료' : `${formatPrice(stop.price)} 예상`}</span><small>{stop.source ?? '운영자 검수'}{stop.verifiedAt ? ` · ${stop.verifiedAt} 확인` : ''}</small></div><PlaceLookup stop={stop} /></div></div>)}</div>
+  return <div className="timeline">{stops.map((stop, index) => <div className="timeline-stop" key={`${stop.time}-${stop.title}-${index}`}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className="stop-card"><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onMove && <><button disabled={disabled || index === 0} aria-label={`${stop.title} 위로 이동`} onClick={() => onMove(index, -1)}><ChevronUp size={14} /></button><button disabled={disabled || index === stops.length - 1} aria-label={`${stop.title} 아래로 이동`} onClick={() => onMove(index, 1)}><ChevronDown size={14} /></button></>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><b>{stop.title}</b><p>{stop.description}</p>{onEdit && <button className="replace-place-button" disabled={disabled} onClick={() => onEdit(index)}><MapPin size={13} /> 장소 변경</button>}<div className="stop-footer"><span>{stop.price === 0 ? '무료' : `${formatPrice(stop.price)} 예상`}</span><small>{stop.source ?? '운영자 검수'}{stop.verifiedAt ? ` · ${stop.verifiedAt} 확인` : ''}</small></div><PlaceLookup stop={stop} /></div></div>)}</div>
 }
 
 function RouteMap({ stops }: { stops: Stop[] }) {
