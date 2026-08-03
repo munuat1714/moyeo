@@ -119,20 +119,16 @@ export async function generateRouteCourses(originName: string, destinationName: 
   if (pool.length < 6) throw new Error('경로 주변 추천 장소가 부족합니다.')
 
   return profiles.map((profile) => {
-    const selected = selectPlaces(pool, origin, destination, profile.id)
+    const selected = selectPlaces(pool, origin, destination, profile.id).slice(0, 4)
     const ordered = nearestOrder(selected, origin)
-    const day1 = ordered.slice(0, 3), day2 = nearestOrder(ordered.slice(3), destination).reverse()
-    const routePoints = [origin, ...day1, ...day2, destination]
+    const routePoints = [origin, ...ordered, destination]
     const routeKm = routePoints.slice(1).reduce((sum, point, index) => sum + distanceKm(routePoints[index], point), 0)
     const price = selected.reduce((sum, place) => sum + (keywordMeta[place.keyword]?.price ?? 0), 0)
     return {
       id: profile.id, title: profile.title, label: profile.label, emoji: profile.emoji,
-      description: `${originName}에서 ${destinationName}까지 가까운 실제 장소를 우선한 코스`,
+      description: `${originName}에서 출발해 ${destinationName}에서 끝나는 가까운 당일치기 코스`,
       match: 80, tags: [...profile.tags], totalPrice: price, travelMinutes: Math.max(20, Math.round(routeKm * 4)),
-      days: [
-        [endpointStop(originName, '09:30', origin, true), ...day1.map((place, index) => routeStop(place.title, ['10:10', '12:00', '14:30'][index], place))],
-        [...day2.map((place, index) => routeStop(place.title, ['10:00', '12:30', '15:00'][index], place)), endpointStop(destinationName, '17:30', destination, false)],
-      ],
+      days: [[endpointStop(originName, '09:30', origin, true), ...ordered.map((place, index) => routeStop(place.title, ['10:10', '12:00', '14:00', '16:00'][index], place)), endpointStop(destinationName, '18:00', destination, false)]],
     }
   })
 }

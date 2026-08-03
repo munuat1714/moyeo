@@ -19,7 +19,7 @@ export const initialState: AppState = {
     origin: '',
     destination: '',
     startDate: '2026-08-15',
-    endDate: '2026-08-16',
+    endDate: '2026-08-15',
     transport: '대중교통',
     stay: '감성 숙소',
   },
