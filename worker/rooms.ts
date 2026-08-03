@@ -93,7 +93,7 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
     const hostName = text(body.hostName, 20), startDate = text(body.startDate, 10), endDate = text(body.endDate, 10);
     const transport = text(body.transport, 20), stay = text(body.stay, 30);
     const expectedMembers = Number(body.expectedMembers ?? 4);
-    if (!name || !origin || !destination || !hostName || !startDate || !endDate || !Number.isInteger(expectedMembers) || expectedMembers < 2 || expectedMembers > 6) {
+    if (!name || !origin || !destination || !hostName || !startDate || !endDate || !Number.isInteger(expectedMembers) || expectedMembers < 1 || expectedMembers > 6) {
       return json({ error: '여행방 필수 정보를 확인해 주세요.' }, 400);
     }
     const roomId = randomRoomId(), memberId = crypto.randomUUID(), token = crypto.randomUUID();

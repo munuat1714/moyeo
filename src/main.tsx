@@ -119,6 +119,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
   const [itinerary, setItinerary] = useState<Stop[][] | null>(null)
   const [editingStop, setEditingStop] = useState<{ day: number; index: number } | null>(null)
   const [itinerarySaving, setItinerarySaving] = useState(false)
+  const [showFinalRoute, setShowFinalRoute] = useState(false)
 
   const refresh = async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -163,9 +164,9 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
   }, [allReady, snapshot?.requesterMemberId, routeCourses, recommendationLoading, recommendationError])
 
   useEffect(() => {
-    if (!finalCourse || itinerary) return
+    if (!showFinalRoute || !finalCourse || itinerary) return
     void fetchLiveItinerary(roomId).then((result) => setItinerary(result.days)).catch((reason) => setError(reason instanceof Error ? reason.message : '최종 일정을 불러오지 못했습니다.'))
-  }, [finalCourse?.id, itinerary, roomId])
+  }, [showFinalRoute, finalCourse?.id, itinerary, roomId])
 
   const join = async () => {
     if (!name.trim()) return
@@ -290,7 +291,8 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
         {allReady && recommendationError && <div className="live-card recommendation-error"><b>경로 기반 추천을 만들지 못했어요</b><span>{recommendationError}</span><button className="secondary-button" onClick={() => { setRecommendationError(''); void loadRecommendations() }}>다시 추천하기</button></div>}
         {allReady && routeCourses && !finalCourse && <section className="live-section"><div className="section-heading"><h2>{snapshot.room.voteRound === 2 ? '공동 1위 결선투표' : '우리 경로에 맞는 코스 3가지'}</h2><p>{snapshot.room.voteRound === 2 ? '동률인 코스 중 하나를 다시 골라 주세요.' : `${snapshot.room.origin}에서 ${snapshot.room.destination}까지 가까운 실제 장소를 우선했어요.`}</p></div><div className="live-course-list">{availableCourses.map((course) => <div key={course.id}><CourseCard course={course} expanded={false} onToggle={() => undefined} />{!snapshot.hasVoted && <button className={`live-vote-choice ${selectedCourseId === course.id ? 'selected' : ''}`} onClick={() => setSelectedCourseId(course.id)}>{selectedCourseId === course.id && <Check size={15} />} 이 코스에 투표</button>}</div>)}</div>{snapshot.hasVoted && !snapshot.allVoted && <div className="lock-note"><Vote size={18} /><div><b>내 투표를 저장했어요</b><span>모두 투표할 때까지 선택은 공개되지 않습니다.</span></div></div>}{!snapshot.hasVoted && <button className="primary-button sticky-action" disabled={!selectedCourseId || working} onClick={vote}>익명 투표 보내기 <Vote size={18} /></button>}{snapshot.allVoted && <><div className="result-list">{availableCourses.map((course) => <div key={course.id}><span>{course.emoji}</span><div><b>{course.title}</b><div className="vote-bar"><i style={{ width: `${((voteCounts[course.id] ?? 0) / snapshot.members.length) * 100}%` }} /></div></div><strong>{voteCounts[course.id] ?? 0}표</strong></div>)}</div><button className="primary-button sticky-action" disabled={working} onClick={resolve}>{snapshot.room.voteRound === 1 ? '결과 확인하기' : '최종 코스 확정하기'} <ArrowRight size={18} /></button></>}</section>}
 
-        {finalCourse && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 당일치기 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.startDate} · 취향 일치 {finalCourse.match}%</p></div><div className="final-route-heading"><Map size={16} /><b>최종 경로</b></div><RouteMap stops={(itinerary ?? finalCourse.days)[finalDay]} />{(itinerary ?? finalCourse.days).length > 1 ? <div className="day-switch">{(itinerary ?? finalCourse.days).map((_, index) => <button key={index} className={finalDay === index ? 'active' : ''} onClick={() => { setFinalDay(index); setEditingStop(null) }}>DAY {index + 1}</button>)}</div> : <div className="single-day-label"><CalendarDays size={15} /> 당일 일정</div>}{requester?.host && <div className="route-edit-notice"><Sparkles size={15} /><span>화살표로 순서를 바꾸거나 `장소 변경`으로 실제 장소를 검색할 수 있어요.{itinerarySaving ? ' 저장 중…' : ''}</span></div>}<Timeline stops={(itinerary ?? finalCourse.days)[finalDay]} onMove={requester?.host ? (index, direction) => moveStop(finalDay, index, direction) : undefined} onEdit={requester?.host ? (index) => setEditingStop({ day: finalDay, index }) : undefined} disabled={itinerarySaving} />{editingStop?.day === finalDay && <RoutePlaceEditor current={(itinerary ?? finalCourse.days)[finalDay][editingStop.index]} onCancel={() => setEditingStop(null)} onSelect={replaceStop} />}</section>}
+        {finalCourse && !showFinalRoute && <section className="live-section"><button className="confirmed-route-card" onClick={() => setShowFinalRoute(true)}><span className="result-icon"><Check /></span><span><small>취향 분석과 투표가 끝났어요</small><b>확정된 경로 보기</b><em>{finalCourse.title} · 취향 일치 {finalCourse.match}%</em></span><ArrowRight size={20} /></button></section>}
+        {finalCourse && showFinalRoute && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 당일치기 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.startDate} · 취향 일치 {finalCourse.match}%</p></div><div className="final-route-heading"><Map size={16} /><b>최종 경로</b></div><RouteMap stops={(itinerary ?? finalCourse.days)[finalDay]} />{(itinerary ?? finalCourse.days).length > 1 ? <div className="day-switch">{(itinerary ?? finalCourse.days).map((_, index) => <button key={index} className={finalDay === index ? 'active' : ''} onClick={() => { setFinalDay(index); setEditingStop(null) }}>DAY {index + 1}</button>)}</div> : <div className="single-day-label"><CalendarDays size={15} /> 당일 일정</div>}{requester?.host && <div className="route-edit-notice"><Sparkles size={15} /><span>화살표로 순서를 바꾸거나 `장소 변경`으로 실제 장소를 검색할 수 있어요.{itinerarySaving ? ' 저장 중…' : ''}</span></div>}<Timeline stops={(itinerary ?? finalCourse.days)[finalDay]} onMove={requester?.host ? (index, direction) => moveStop(finalDay, index, direction) : undefined} onEdit={requester?.host ? (index) => setEditingStop({ day: finalDay, index }) : undefined} disabled={itinerarySaving} />{editingStop?.day === finalDay && <RoutePlaceEditor current={(itinerary ?? finalCourse.days)[finalDay][editingStop.index]} onCancel={() => setEditingStop(null)} onSelect={replaceStop} />}</section>}
       </>}
     </main>
   </div>
@@ -380,7 +382,7 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
         <label>내 별명<input maxLength={20} value={hostName} onChange={(e) => setHostName(e.target.value)} /></label>
         <label>함께 갈 인원
           <div className="segmented member-count">
-            {[2, 3, 4, 5, 6].map((count) => <button type="button" className={expectedMembers === count ? 'active' : ''} onClick={() => setExpectedMembers(count)} key={count}>{count}명</button>)}
+            {[1, 2, 3, 4, 5, 6].map((count) => <button type="button" className={expectedMembers === count ? 'active' : ''} onClick={() => setExpectedMembers(count)} key={count}>{count}명</button>)}
           </div>
         </label>
         <div className="expiry-notice"><Clock3 size={16} /><span>여행방과 별명·취향·투표 데이터는 생성일로부터 <b>7일 후 자동 삭제</b>됩니다.</span></div>
