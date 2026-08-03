@@ -15,9 +15,10 @@ describe('경로 기반 추천 거리 계산', () => {
     expect(distanceKm(point, point)).toBe(0)
   })
 
-  it('팀원들이 고른 방문 장소 수의 평균을 2~6곳으로 계산한다', () => {
+  it('팀원들이 고른 방문 장소 수의 평균을 1~6곳으로 계산한다', () => {
     expect(resolveVisitCount([{ placeCount: 3 }, { placeCount: 5 }])).toBe(4)
     expect(resolveVisitCount([{ placeCount: 10 }])).toBe(6)
+    expect(resolveVisitCount([{ placeCount: 0 }])).toBe(1)
   })
 
   it('경로에 직접 반영할 취향만 제공한다', () => {

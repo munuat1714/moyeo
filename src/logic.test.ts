@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { aggregateThemes, allPreferencesComplete, recommendCourses, tallyVotes } from './logic'
 import type { Course, Member } from './types'
 
-const preference = { themes: ['맛집', '사진 명소'], placeCount: 4, food: '한식', mood: '감성적인', constraint: '' }
+const preference = { themes: ['맛집', '사진 명소'], placeCount: 4, food: '한식', mood: '감성적인' }
 
 describe('여행 그룹 핵심 로직', () => {
   it('전원이 취향을 입력해야 완료된다', () => {

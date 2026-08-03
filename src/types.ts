@@ -4,7 +4,6 @@ export type Preference = {
   pace?: string
   food: string
   mood: string
-  constraint: string
 }
 
 export type Member = {

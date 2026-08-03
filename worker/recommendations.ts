@@ -66,7 +66,7 @@ export function distanceKm(a: { latitude: number; longitude: number }, b: { lati
 
 export function resolveVisitCount(preferences: RoutePreference[]) {
   const counts = preferences.map((preference) => preference.placeCount ?? (preference.pace === '여유롭게' ? 3 : preference.pace === '알차게' ? 5 : 4))
-  return Math.max(2, Math.min(6, Math.round(counts.reduce((sum, count) => sum + count, 0) / Math.max(1, counts.length))))
+  return Math.max(1, Math.min(6, Math.round(counts.reduce((sum, count) => sum + count, 0) / Math.max(1, counts.length))))
 }
 
 function routeStop(title: string, time: string, point: SearchPlace, shared = false): Stop {
