@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { aggregateThemes, allPreferencesComplete, recommendCourses, tallyVotes } from './logic'
 import type { Course, Member } from './types'
 
-const preference = { themes: ['맛집', '사진'], pace: '적당하게', food: '한식', mood: '감성적인', constraint: '' }
+const preference = { themes: ['맛집', '사진 명소'], placeCount: 4, food: '한식', mood: '감성적인', constraint: '' }
 
 describe('여행 그룹 핵심 로직', () => {
   it('전원이 취향을 입력해야 완료된다', () => {
@@ -21,7 +21,7 @@ describe('여행 그룹 핵심 로직', () => {
     ]
     expect(aggregateThemes(members)).toEqual([
       { theme: '맛집', count: 2 },
-      { theme: '사진', count: 1 },
+      { theme: '사진 명소', count: 1 },
     ])
   })
 
@@ -40,7 +40,7 @@ describe('여행 그룹 핵심 로직', () => {
     const sample = (id: string, tags: string[]): Course => ({ id, title: id, label: '', emoji: '', description: '', match: 0, tags, totalPrice: 0, travelMinutes: 0, days: [[], []] })
     const members: Member[] = [
       { id: '1', name: '민지', color: '#fff', preference: { ...preference, themes: ['맛집', '사진'] } },
-      { id: '2', name: '서준', color: '#000', preference: { ...preference, themes: ['맛집', '산책'] } },
+      { id: '2', name: '서준', color: '#000', preference: { ...preference, themes: ['맛집', '쇼핑'] } },
     ]
     const ranked = recommendCourses([sample('photo', ['사진']), sample('balanced', ['맛집', '산책'])], members)
     expect(ranked[0].id).toBe('balanced')

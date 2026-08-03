@@ -145,7 +145,8 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
       return json({ error: '모든 참여자가 취향을 입력한 뒤 추천을 만들 수 있습니다.' }, 409);
     }
     try {
-      const courses = await generateRouteCourses(room.origin, room.destination, searchCredentials);
+      const preferences = members.results.flatMap((item) => item.preference_json ? [JSON.parse(item.preference_json)] : []);
+      const courses = await generateRouteCourses(room.origin, room.destination, searchCredentials, preferences);
       const encoded = JSON.stringify(courses);
       await db.prepare('UPDATE rooms SET recommendation_json = ?1 WHERE id = ?2 AND recommendation_json IS NULL').bind(encoded, roomId).run();
       const saved = await db.prepare('SELECT recommendation_json FROM rooms WHERE id = ?1').bind(roomId).first<{ recommendation_json: string }>();

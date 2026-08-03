@@ -1,15 +1,14 @@
 import type { AppState, Course, Preference, Stop } from './types'
 
-export const themes = ['맛집', '감성 카페', '사진', '산책', '액티비티', '역사']
-export const paces = ['여유롭게', '적당하게', '알차게']
+export const themes = ['맛집', '감성 카페', '사진 명소', '액티비티', '역사·문화', '쇼핑']
 export const foods = ['한식', '베이커리', '고기', '채식']
 export const moods = ['감성적인', '활기찬', '조용한', '로컬']
 
 export const demoPreferences: Record<string, Preference> = {
-  minji: { themes: ['맛집', '감성 카페', '사진'], pace: '적당하게', food: '한식', mood: '감성적인', constraint: '' },
-  seojun: { themes: ['맛집', '산책', '역사'], pace: '알차게', food: '고기', mood: '로컬', constraint: '' },
-  yuna: { themes: ['감성 카페', '사진', '산책'], pace: '여유롭게', food: '베이커리', mood: '감성적인', constraint: '견과류 알레르기' },
-  hyunwoo: { themes: ['맛집', '액티비티', '사진'], pace: '적당하게', food: '한식', mood: '활기찬', constraint: '' },
+  minji: { themes: ['맛집', '감성 카페', '사진 명소'], placeCount: 4, food: '한식', mood: '감성적인', constraint: '' },
+  seojun: { themes: ['맛집', '역사·문화', '쇼핑'], placeCount: 5, food: '고기', mood: '로컬', constraint: '' },
+  yuna: { themes: ['감성 카페', '사진 명소', '쇼핑'], placeCount: 3, food: '베이커리', mood: '감성적인', constraint: '견과류 알레르기' },
+  hyunwoo: { themes: ['맛집', '액티비티', '사진 명소'], placeCount: 4, food: '한식', mood: '활기찬', constraint: '' },
 }
 
 export const initialState: AppState = {

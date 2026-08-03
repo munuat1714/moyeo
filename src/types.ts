@@ -1,6 +1,7 @@
 export type Preference = {
   themes: string[]
-  pace: string
+  placeCount: number
+  pace?: string
   food: string
   mood: string
   constraint: string

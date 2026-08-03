@@ -11,6 +11,8 @@ type SearchPlace = {
   keyword: string
 }
 
+type RoutePreference = { themes?: string[]; placeCount?: number; pace?: string }
+
 const profiles = [
   { id: 'balance', title: '가까운 곳부터 알차게', label: '동선 균형', emoji: '✨', tags: ['맛집', '감성 카페', '사진'] },
   { id: 'slow', title: '천천히 머무는 동네 여행', label: '여유 중심', emoji: '🌿', tags: ['감성 카페', '산책', '사진'] },
@@ -24,6 +26,12 @@ const keywordMeta: Record<string, { category: string; duration: string; price: n
   공원: { category: '산책', duration: '1시간', price: 0 },
   체험: { category: '액티비티', duration: '1시간 30분', price: 18000 },
   전시: { category: '관광', duration: '1시간 20분', price: 10000 },
+  쇼핑: { category: '쇼핑', duration: '1시간 20분', price: 20000 },
+}
+
+const themeKeyword: Record<string, string> = {
+  '맛집': '맛집', '감성 카페': '카페', '사진 명소': '관광명소', '사진': '관광명소',
+  '액티비티': '체험', '역사·문화': '전시', '역사': '전시', '쇼핑': '쇼핑',
 }
 
 const strip = (value: unknown) => String(value ?? '')
@@ -54,6 +62,11 @@ export function distanceKm(a: { latitude: number; longitude: number }, b: { lati
   const dLat = radians(b.latitude - a.latitude), dLon = radians(b.longitude - a.longitude)
   const value = Math.sin(dLat / 2) ** 2 + Math.cos(radians(a.latitude)) * Math.cos(radians(b.latitude)) * Math.sin(dLon / 2) ** 2
   return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value))
+}
+
+export function resolveVisitCount(preferences: RoutePreference[]) {
+  const counts = preferences.map((preference) => preference.placeCount ?? (preference.pace === '여유롭게' ? 3 : preference.pace === '알차게' ? 5 : 4))
+  return Math.max(2, Math.min(6, Math.round(counts.reduce((sum, count) => sum + count, 0) / Math.max(1, counts.length))))
 }
 
 function routeStop(title: string, time: string, point: SearchPlace, shared = false): Stop {
@@ -88,10 +101,11 @@ function nearestOrder(items: SearchPlace[], start: SearchPlace) {
   return ordered
 }
 
-function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destination: SearchPlace, profileId: string) {
-  const preferred = profileId === 'slow' ? ['카페', '공원', '전시', '맛집', '관광명소', '체험']
-    : profileId === 'active' ? ['체험', '관광명소', '맛집', '전시', '카페', '공원']
-      : ['맛집', '카페', '관광명소', '공원', '전시', '체험']
+function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destination: SearchPlace, profileId: string, teamKeywords: string[], count: number) {
+  const variant = profileId === 'slow' ? ['카페', '전시', '관광명소', '맛집', '쇼핑', '체험']
+    : profileId === 'active' ? ['체험', '쇼핑', '관광명소', '맛집', '전시', '카페']
+      : ['맛집', '카페', '관광명소', '쇼핑', '전시', '체험']
+  const preferred = [...new Set([...teamKeywords, ...variant])]
   const direct = distanceKm(origin, destination)
   const maxEndpointDistance = direct < 2 ? 5 : Math.max(5, Math.min(10, direct * .65))
   const close = pool.filter((place) => Math.min(distanceKm(origin, place), distanceKm(destination, place)) <= maxEndpointDistance)
@@ -100,10 +114,10 @@ function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destination: Sea
     .sort((a, b) => preferred.indexOf(a.keyword) - preferred.indexOf(b.keyword)
       || Math.min(distanceKm(origin, a), distanceKm(destination, a)) - Math.min(distanceKm(origin, b), distanceKm(destination, b)))
     .filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
-    .slice(0, 6)
+    .slice(0, count)
 }
 
-export async function generateRouteCourses(originName: string, destinationName: string, credentials: SearchCredentials): Promise<Course[]> {
+export async function generateRouteCourses(originName: string, destinationName: string, credentials: SearchCredentials, preferences: RoutePreference[] = []): Promise<Course[]> {
   if (!credentials.clientId || !credentials.clientSecret) throw new Error('네이버 지역검색 설정이 필요합니다.')
   const [originResults, destinationResults] = await Promise.all([
     search(`부산 ${originName}`, '출발지', credentials, 1),
@@ -112,14 +126,19 @@ export async function generateRouteCourses(originName: string, destinationName: 
   const origin = originResults[0], destination = destinationResults[0]
   if (!origin || !destination) throw new Error('출발 또는 도착 장소를 찾지 못했습니다.')
 
-  const keywords = ['맛집', '카페', '관광명소', '공원', '체험', '전시']
+  const themeCounts: Record<string, number> = {}
+  preferences.flatMap((preference) => preference.themes ?? []).forEach((theme) => { themeCounts[theme] = (themeCounts[theme] ?? 0) + 1 })
+  const topThemes = Object.entries(themeCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko')).map(([theme]) => theme)
+  const teamKeywords = [...new Set(topThemes.map((theme) => themeKeyword[theme]).filter(Boolean))]
+  const visitCount = resolveVisitCount(preferences)
+  const keywords = [...new Set([...teamKeywords, '맛집', '카페', '관광명소', '체험', '전시', '쇼핑'])]
   const zones = originName.trim() === destinationName.trim() ? [originName] : [originName, destinationName]
   const batches = await Promise.all(zones.flatMap((zone) => keywords.map((keyword) => search(`부산 ${zone} ${keyword}`, keyword, credentials))))
   const pool = batches.flat().filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
   if (pool.length < 6) throw new Error('경로 주변 추천 장소가 부족합니다.')
 
   return profiles.map((profile) => {
-    const selected = selectPlaces(pool, origin, destination, profile.id).slice(0, 4)
+    const selected = selectPlaces(pool, origin, destination, profile.id, teamKeywords, visitCount)
     const ordered = nearestOrder(selected, origin)
     const routePoints = [origin, ...ordered, destination]
     const routeKm = routePoints.slice(1).reduce((sum, point, index) => sum + distanceKm(routePoints[index], point), 0)
@@ -127,8 +146,14 @@ export async function generateRouteCourses(originName: string, destinationName: 
     return {
       id: profile.id, title: profile.title, label: profile.label, emoji: profile.emoji,
       description: `${originName}에서 출발해 ${destinationName}에서 끝나는 가까운 당일치기 코스`,
-      match: 80, tags: [...profile.tags], totalPrice: price, travelMinutes: Math.max(20, Math.round(routeKm * 4)),
-      days: [[endpointStop(originName, '09:30', origin, true), ...ordered.map((place, index) => routeStop(place.title, ['10:10', '12:00', '14:00', '16:00'][index], place)), endpointStop(destinationName, '18:00', destination, false)]],
+      match: 80, tags: [...new Set([...topThemes, ...profile.tags])].slice(0, 4), totalPrice: price, travelMinutes: Math.max(20, Math.round(routeKm * 4)),
+      days: [[endpointStop(originName, '09:30', origin, true), ...ordered.map((place, index) => routeStop(place.title, visitTime(index, ordered.length), place)), endpointStop(destinationName, '18:00', destination, false)]],
     }
   })
+}
+
+function visitTime(index: number, total: number) {
+  const startMinutes = 10 * 60 + 15, endMinutes = 16 * 60 + 45
+  const value = total <= 1 ? startMinutes : Math.round(startMinutes + (endMinutes - startMinutes) * index / (total - 1))
+  return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`
 }
