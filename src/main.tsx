@@ -298,6 +298,8 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
   const [expectedMembers, setExpectedMembers] = useState(4)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+  const [originSelected, setOriginSelected] = useState(false)
+  const [destinationSelected, setDestinationSelected] = useState(false)
   const createRoom = async () => {
     setCreating(true); setError('')
     try {
@@ -318,13 +320,13 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
       </div>
       <div className="form-card">
         <label>여행방 이름<input value={state.trip.name} onChange={(e) => setTrip('name', e.target.value)} /></label>
-        <div className="route-input-heading"><b>여행 경로</b><button type="button" onClick={() => { setTrip('origin', ''); setTrip('destination', '') }}>입력 지우기</button></div>
+        <div className="route-input-heading"><b>여행 경로</b><button type="button" onClick={() => { setTrip('origin', ''); setTrip('destination', ''); setOriginSelected(false); setDestinationSelected(false) }}>입력 지우기</button></div>
         <div className="field-row route-fields">
-          <label>출발 장소<input type="text" autoComplete="off" placeholder="예: 부산역" value={state.trip.origin} onChange={(e) => setTrip('origin', e.target.value)} /></label>
+          <LocationSearchField label="출발 장소" placeholder="식당·숙소·역 이름 검색" value={state.trip.origin} onChange={(value) => setTrip('origin', value)} selected={originSelected} onSelectedChange={setOriginSelected} />
           <ArrowRight size={19} className="field-arrow" />
-          <label>도착 장소<input type="text" autoComplete="off" placeholder="예: 해운대" value={state.trip.destination} onChange={(e) => setTrip('destination', e.target.value)} /></label>
+          <LocationSearchField label="도착 장소" placeholder="식당·숙소·역 이름 검색" value={state.trip.destination} onChange={(value) => setTrip('destination', value)} selected={destinationSelected} onSelectedChange={setDestinationSelected} />
         </div>
-        <small className="route-data-note">현재 추천 코스와 장소 데이터는 부산 지역을 기준으로 제공됩니다.</small>
+        <small className="route-data-note">검색 결과에서 실제 장소를 선택해 주세요. 현재 부산 지역 장소를 지원합니다.</small>
         <div className="field-row dates">
           <label>가는 날<input type="date" value={state.trip.startDate} onChange={(e) => setTrip('startDate', e.target.value)} /></label>
           <label>오는 날<input type="date" value={state.trip.endDate} onChange={(e) => setTrip('endDate', e.target.value)} /></label>
@@ -343,9 +345,57 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
         <div className="expiry-notice"><Clock3 size={16} /><span>여행방과 별명·취향·투표 데이터는 생성일로부터 <b>7일 후 자동 삭제</b>됩니다.</span></div>
       </div>
       {error && <div className="form-error" role="alert">{error}</div>}
-      <button className="primary-button sticky-action" disabled={creating || !state.trip.origin.trim() || !state.trip.destination.trim() || !hostName.trim()} onClick={createRoom}>{creating ? '여행방 만드는 중…' : '여행방 만들기'} <ArrowRight size={18} /></button>
+      <button className="primary-button sticky-action" disabled={creating || !originSelected || !destinationSelected || !hostName.trim()} onClick={createRoom}>{creating ? '여행방 만드는 중…' : '여행방 만들기'} <ArrowRight size={18} /></button>
     </section>
   )
+}
+
+type LocationSuggestion = { title: string; roadAddress?: string; address?: string }
+
+function LocationSearchField({ label, placeholder, value, onChange, selected, onSelectedChange }: {
+  label: string
+  placeholder: string
+  value: string
+  onChange: (value: string) => void
+  selected: boolean
+  onSelectedChange: (selected: boolean) => void
+}) {
+  const [items, setItems] = useState<LocationSuggestion[]>([])
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (selected || value.trim().length < 2) { setItems([]); setMessage(''); return }
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      setLoading(true); setMessage('')
+      try {
+        const response = await fetch(`/api/naver/local?query=${encodeURIComponent(`부산 ${value.trim()}`)}`, { signal: controller.signal })
+        const data = await response.json() as { items?: LocationSuggestion[]; error?: string }
+        if (!response.ok) throw new Error(data.error ?? '장소를 검색하지 못했습니다.')
+        setItems(data.items ?? [])
+        setOpen(true)
+        if (!data.items?.length) setMessage('검색 결과가 없습니다. 더 정확한 장소명을 입력해 주세요.')
+      } catch (reason) {
+        if ((reason as Error).name !== 'AbortError') setMessage(reason instanceof Error ? reason.message : '장소를 검색하지 못했습니다.')
+      } finally { if (!controller.signal.aborted) setLoading(false) }
+    }, 350)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [value, selected])
+
+  const choose = (item: LocationSuggestion) => {
+    onChange(item.title)
+    onSelectedChange(true)
+    setItems([]); setOpen(false); setMessage('')
+  }
+
+  return <label className="location-search-field">{label}
+    <span className={`location-input ${selected ? 'selected' : ''}`}><MapPin size={17} /><input type="search" autoComplete="off" placeholder={placeholder} value={value} onFocus={() => items.length && setOpen(true)} onChange={(event) => { onChange(event.target.value); onSelectedChange(false); setOpen(true) }} />{selected && <Check size={16} />}</span>
+    {loading && <small className="location-status">검색 중…</small>}
+    {message && <small className="location-status error">{message}</small>}
+    {open && items.length > 0 && <div className="location-results" role="listbox">{items.map((item, index) => <button type="button" role="option" key={`${item.title}-${index}`} onClick={() => choose(item)}><MapPin size={15} /><span><b>{item.title}</b><small>{item.roadAddress || item.address || '주소 정보 없음'}</small></span></button>)}</div>}
+  </label>
 }
 
 function Room({ state, setState }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
