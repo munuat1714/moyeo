@@ -11,7 +11,7 @@ type SearchPlace = {
   keyword: string
 }
 
-type RoutePreference = { themes?: string[]; placeCount?: number; pace?: string }
+type RoutePreference = { themes?: string[]; placeCount?: number; pace?: string; food?: string }
 
 const profiles = [
   { id: 'balance', title: '가까운 곳부터 알차게', label: '동선 균형', emoji: '✨', tags: ['맛집', '감성 카페', '사진'] },
@@ -27,11 +27,25 @@ const keywordMeta: Record<string, { category: string; duration: string; price: n
   체험: { category: '액티비티', duration: '1시간 30분', price: 18000 },
   전시: { category: '관광', duration: '1시간 20분', price: 10000 },
   쇼핑: { category: '쇼핑', duration: '1시간 20분', price: 20000 },
+  한식: { category: '맛집', duration: '1시간 20분', price: 18000 },
+  고기: { category: '맛집', duration: '1시간 20분', price: 22000 },
+  해산물: { category: '맛집', duration: '1시간 20분', price: 25000 },
+  일식: { category: '맛집', duration: '1시간 20분', price: 20000 },
+  중식: { category: '맛집', duration: '1시간 20분', price: 18000 },
+  양식: { category: '맛집', duration: '1시간 20분', price: 22000 },
+  분식: { category: '맛집', duration: '1시간', price: 10000 },
+  베이커리: { category: '카페', duration: '1시간', price: 9000 },
+  채식: { category: '맛집', duration: '1시간 20분', price: 18000 },
 }
 
 const themeKeyword: Record<string, string> = {
   '맛집': '맛집', '감성 카페': '카페', '사진 명소': '관광명소', '사진': '관광명소',
   '액티비티': '체험', '역사·문화': '전시', '역사': '전시', '쇼핑': '쇼핑',
+}
+
+const foodKeyword: Record<string, string> = {
+  '한식': '한식', '고기·구이': '고기', '고기': '고기', '해산물': '해산물', '일식': '일식',
+  '중식': '중식', '양식': '양식', '분식': '분식', '디저트·베이커리': '베이커리', '베이커리': '베이커리', '채식': '채식',
 }
 
 const strip = (value: unknown) => String(value ?? '')
@@ -110,11 +124,18 @@ function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destination: Sea
   const maxEndpointDistance = direct < 2 ? 5 : Math.max(5, Math.min(10, direct * .65))
   const close = pool.filter((place) => Math.min(distanceKm(origin, place), distanceKm(destination, place)) <= maxEndpointDistance)
   const candidates = close.length >= 6 ? close : pool
-  return [...candidates]
-    .sort((a, b) => preferred.indexOf(a.keyword) - preferred.indexOf(b.keyword)
-      || Math.min(distanceKm(origin, a), distanceKm(destination, a)) - Math.min(distanceKm(origin, b), distanceKm(destination, b)))
-    .filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
-    .slice(0, count)
+  const unique = [...candidates].filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
+  const endpointDistance = (place: SearchPlace) => Math.min(distanceKm(origin, place), distanceKm(destination, place))
+  const selected: SearchPlace[] = []
+  preferred.forEach((keyword) => {
+    if (selected.length >= count) return
+    const next = unique.filter((place) => place.keyword === keyword && !selected.includes(place)).sort((a, b) => endpointDistance(a) - endpointDistance(b))[0]
+    if (next) selected.push(next)
+  })
+  if (selected.length < count) {
+    unique.filter((place) => !selected.includes(place)).sort((a, b) => endpointDistance(a) - endpointDistance(b)).slice(0, count - selected.length).forEach((place) => selected.push(place))
+  }
+  return selected
 }
 
 export async function generateRouteCourses(originName: string, destinationName: string, credentials: SearchCredentials, preferences: RoutePreference[] = []): Promise<Course[]> {
@@ -129,7 +150,12 @@ export async function generateRouteCourses(originName: string, destinationName: 
   const themeCounts: Record<string, number> = {}
   preferences.flatMap((preference) => preference.themes ?? []).forEach((theme) => { themeCounts[theme] = (themeCounts[theme] ?? 0) + 1 })
   const topThemes = Object.entries(themeCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko')).map(([theme]) => theme)
-  const teamKeywords = [...new Set(topThemes.map((theme) => themeKeyword[theme]).filter(Boolean))]
+  const foodCounts: Record<string, number> = {}
+  preferences.forEach((preference) => { if (preference.food) foodCounts[preference.food] = (foodCounts[preference.food] ?? 0) + 1 })
+  const topFoods = Object.entries(foodCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko')).map(([food]) => food)
+  const tasteKeywords = topThemes.map((theme) => themeKeyword[theme]).filter(Boolean)
+  const foodKeywords = topFoods.map((food) => foodKeyword[food]).filter(Boolean)
+  const teamKeywords = [...new Set([tasteKeywords[0], foodKeywords[0], ...tasteKeywords.slice(1), ...foodKeywords.slice(1)].filter(Boolean))]
   const visitCount = resolveVisitCount(preferences)
   const keywords = [...new Set([...teamKeywords, '맛집', '카페', '관광명소', '체험', '전시', '쇼핑'])]
   const zones = originName.trim() === destinationName.trim() ? [originName] : [originName, destinationName]
@@ -146,7 +172,7 @@ export async function generateRouteCourses(originName: string, destinationName: 
     return {
       id: profile.id, title: profile.title, label: profile.label, emoji: profile.emoji,
       description: `${originName}에서 출발해 ${destinationName}에서 끝나는 가까운 당일치기 코스`,
-      match: 80, tags: [...new Set([...topThemes, ...profile.tags])].slice(0, 4), totalPrice: price, travelMinutes: Math.max(20, Math.round(routeKm * 4)),
+      match: 80, tags: [...new Set([...topThemes, ...topFoods, ...profile.tags])].slice(0, 4), totalPrice: price, travelMinutes: Math.max(20, Math.round(routeKm * 4)),
       days: [[endpointStop(originName, '09:30', origin, true), ...ordered.map((place, index) => routeStop(place.title, visitTime(index, ordered.length), place)), endpointStop(destinationName, '18:00', destination, false)]],
     }
   })
