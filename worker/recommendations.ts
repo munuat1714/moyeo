@@ -246,7 +246,7 @@ async function generateOpenRouteCourses(preferredArea: string, credentials: Sear
       id: profile.id, title: `${zone.label} ${profile.title}`, label: profile.label, emoji: profile.emoji,
       description: `${zone.label} 소권역 안에서 대중교통 누적 이동을 줄인 당일치기 코스`, match: 80,
       tags: [...new Set([...topThemes, ...profile.tags])].slice(0, 4), totalPrice: 0,
-      travelMinutes: Math.max(10, Math.round(routeKm * 5)),
+      travelMinutes: Math.max(15, Math.round(routeKm * 5 + Math.max(0, ordered.length - 1) * 8)),
       days: [[...ordered.map((place, index) => routeStop(place.title, visitTime(index, ordered.length), place))]],
     }
   })
