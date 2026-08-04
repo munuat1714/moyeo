@@ -170,6 +170,7 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
     } catch (reason) {
       console.error('route-recommendation-failed', reason);
       await db.prepare("UPDATE rooms SET recommendation_status = 'failed', recommendation_retry_at = ?1 WHERE id = ?2 AND recommendation_json IS NULL").bind(now + 60, roomId).run();
+      if (reason instanceof Error && reason.name === 'NaverRateLimitError') return json({ status: 'pending', retryAfterMs: 10_000 }, 202);
       return json({ error: reason instanceof Error ? reason.message : '경로 주변 추천을 만들지 못했습니다.' }, 502);
     }
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { distanceKm, recommendationSearchRequestCount, resolveVisitCount, selectPlaces } from '../worker/recommendations'
+import { curatedFallbackPlaces, distanceKm, recommendationSearchRequestCount, resolveVisitCount, selectPlaces } from '../worker/recommendations'
 import { foods, themes } from './data'
 
 describe('경로 기반 추천 거리 계산', () => {
@@ -63,5 +63,15 @@ describe('경로 기반 추천 거리 계산', () => {
     expect(recommendationSearchRequestCount(false)).toBe(10)
     expect(recommendationSearchRequestCount(true)).toBe(6)
     expect(recommendationSearchRequestCount(false) * 1000).toBe(10_000)
+  })
+
+  it('네이버 일부 검색이 실패해도 사용할 부산 검수 장소를 확보한다', () => {
+    expect(curatedFallbackPlaces.length).toBeGreaterThanOrEqual(12)
+    expect(new Set(curatedFallbackPlaces.map((place) => place.title)).size).toBe(curatedFallbackPlaces.length)
+    expect(curatedFallbackPlaces).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: '광안리해수욕장' }),
+      expect.objectContaining({ title: '부산시민공원' }),
+      expect.objectContaining({ title: '송도해상케이블카' }),
+    ]))
   })
 })
