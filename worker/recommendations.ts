@@ -115,25 +115,30 @@ function nearestOrder(items: SearchPlace[], start: SearchPlace) {
   return ordered
 }
 
-function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destination: SearchPlace, profileId: string, teamKeywords: string[], count: number) {
+export function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destination: SearchPlace, profileId: string, teamKeywords: string[], count: number) {
   const variant = profileId === 'slow' ? ['카페', '전시', '관광명소', '맛집', '쇼핑', '체험']
     : profileId === 'active' ? ['체험', '쇼핑', '관광명소', '맛집', '전시', '카페']
       : ['맛집', '카페', '관광명소', '쇼핑', '전시', '체험']
   const preferred = [...new Set([...teamKeywords, ...variant])]
   const direct = distanceKm(origin, destination)
-  const maxEndpointDistance = direct < 2 ? 5 : Math.max(5, Math.min(10, direct * .65))
-  const close = pool.filter((place) => Math.min(distanceKm(origin, place), distanceKm(destination, place)) <= maxEndpointDistance)
-  const candidates = close.length >= 6 ? close : pool
+  const nearbyTrip = direct <= 3
+  const center = { latitude: (origin.latitude + destination.latitude) / 2, longitude: (origin.longitude + destination.longitude) / 2 }
+  const distanceFromRouteArea = (place: SearchPlace) => nearbyTrip
+    ? distanceKm(center, place)
+    : Math.min(distanceKm(origin, place), distanceKm(destination, place))
+  const maxRouteAreaDistance = nearbyTrip ? 6 : Math.max(5, Math.min(10, direct * .65))
+  const withoutEndpoints = pool.filter((place) => place.title !== origin.title && place.title !== destination.title && distanceKm(origin, place) > .08 && distanceKm(destination, place) > .08)
+  const close = withoutEndpoints.filter((place) => distanceFromRouteArea(place) <= maxRouteAreaDistance)
+  const candidates = close.length >= Math.min(6, count) ? close : withoutEndpoints
   const unique = [...candidates].filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
-  const endpointDistance = (place: SearchPlace) => Math.min(distanceKm(origin, place), distanceKm(destination, place))
   const selected: SearchPlace[] = []
   preferred.forEach((keyword) => {
     if (selected.length >= count) return
-    const next = unique.filter((place) => place.keyword === keyword && !selected.includes(place)).sort((a, b) => endpointDistance(a) - endpointDistance(b))[0]
+    const next = unique.filter((place) => place.keyword === keyword && !selected.includes(place)).sort((a, b) => distanceFromRouteArea(a) - distanceFromRouteArea(b))[0]
     if (next) selected.push(next)
   })
   if (selected.length < count) {
-    unique.filter((place) => !selected.includes(place)).sort((a, b) => endpointDistance(a) - endpointDistance(b)).slice(0, count - selected.length).forEach((place) => selected.push(place))
+    unique.filter((place) => !selected.includes(place)).sort((a, b) => distanceFromRouteArea(a) - distanceFromRouteArea(b)).slice(0, count - selected.length).forEach((place) => selected.push(place))
   }
   return selected
 }
@@ -146,6 +151,7 @@ export async function generateRouteCourses(originName: string, destinationName: 
   ])
   const origin = originResults[0], destination = destinationResults[0]
   if (!origin || !destination) throw new Error('출발 또는 도착 장소를 찾지 못했습니다.')
+  const nearbyTrip = distanceKm(origin, destination) <= 3
 
   const themeCounts: Record<string, number> = {}
   preferences.flatMap((preference) => preference.themes ?? []).forEach((theme) => { themeCounts[theme] = (themeCounts[theme] ?? 0) + 1 })
@@ -161,7 +167,7 @@ export async function generateRouteCourses(originName: string, destinationName: 
   const visitCount = resolveVisitCount(preferences)
   const keywords = [...new Set([...teamKeywords, '맛집', '카페', '관광명소', '체험', '전시', '쇼핑'])]
   const zones = originName.trim() === destinationName.trim() ? [originName] : [originName, destinationName]
-  const batches = await Promise.all(zones.flatMap((zone) => keywords.map((keyword) => search(`부산 ${zone} ${keyword}`, keyword, credentials))))
+  const batches = await Promise.all(zones.flatMap((zone) => keywords.map((keyword) => search(`부산 ${zone}${nearbyTrip ? ' 주변' : ''} ${keyword}`, keyword, credentials))))
   const pool = batches.flat().filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
   if (pool.length < 6) throw new Error('경로 주변 추천 장소가 부족합니다.')
 
@@ -173,7 +179,9 @@ export async function generateRouteCourses(originName: string, destinationName: 
     const price = selected.reduce((sum, place) => sum + (keywordMeta[place.keyword]?.price ?? 0), 0)
     return {
       id: profile.id, title: profile.title, label: profile.label, emoji: profile.emoji,
-      description: `${originName}에서 출발해 ${destinationName}에서 끝나는 가까운 당일치기 코스`,
+      description: nearbyTrip
+        ? `${originName}과 ${destinationName} 주변의 실제 장소를 둘러보는 당일치기 코스`
+        : `${originName}에서 출발해 ${destinationName}에서 끝나는 가까운 당일치기 코스`,
       match: 80, tags: [...new Set([...topThemes, ...topFoods, ...profile.tags])].slice(0, 4), totalPrice: price, travelMinutes: Math.max(20, Math.round(routeKm * 4)),
       days: [[endpointStop(originName, '09:30', origin, true), ...ordered.map((place, index) => routeStop(place.title, visitTime(index, ordered.length), place)), endpointStop(destinationName, '18:00', destination, false)]],
     }

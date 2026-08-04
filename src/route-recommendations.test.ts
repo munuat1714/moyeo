@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { distanceKm, resolveVisitCount } from '../worker/recommendations'
+import { distanceKm, resolveVisitCount, selectPlaces } from '../worker/recommendations'
 import { foods, themes } from './data'
 
 describe('경로 기반 추천 거리 계산', () => {
@@ -13,6 +13,18 @@ describe('경로 기반 추천 거리 계산', () => {
   it('같은 지점의 거리는 0이다', () => {
     const point = { latitude: 35.1577, longitude: 129.0590 }
     expect(distanceKm(point, point)).toBe(0)
+  })
+
+  it('출발·도착지가 가까우면 두 지점 자체가 아닌 주변 장소를 고른다', () => {
+    const origin = { title: '서면역', category: '역', roadAddress: '', latitude: 35.1577, longitude: 129.0590, keyword: '출발지' }
+    const destination = { title: '전포역', category: '역', roadAddress: '', latitude: 35.1530, longitude: 129.0650, keyword: '도착지' }
+    const pool = [
+      origin,
+      destination,
+      { title: '전포 카페거리', category: '거리', roadAddress: '', latitude: 35.1550, longitude: 129.0630, keyword: '카페' },
+      { title: '부산시민공원', category: '공원', roadAddress: '', latitude: 35.1666, longitude: 129.0557, keyword: '관광명소' },
+    ]
+    expect(selectPlaces(pool, origin, destination, 'balance', ['카페'], 2).map((place) => place.title)).toEqual(['전포 카페거리', '부산시민공원'])
   })
 
   it('팀원들이 고른 방문 장소 수의 평균을 1~6곳으로 계산한다', () => {
