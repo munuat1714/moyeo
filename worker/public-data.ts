@@ -101,7 +101,7 @@ async function savePlaces(db: D1Database, provider: string, places: PublicPlace[
   await markReady(db, provider, places.length, now)
 }
 
-async function enrichTourDetails(db: D1Database, serviceKey: string, limit = 40) {
+async function enrichTourDetails(db: D1Database, serviceKey: string, limit = 15) {
   const stale = Math.floor(Date.now() / 1000) - 30 * 86400
   const rows = await db.prepare(`SELECT source_id,category FROM public_places WHERE provider='TOUR_API' AND active=1
     AND (detail_synced_at IS NULL OR detail_synced_at < ?1) ORDER BY COALESCE(detail_synced_at,0), id LIMIT ?2`).bind(stale, limit).all<any>()
