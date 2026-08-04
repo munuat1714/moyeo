@@ -11,7 +11,7 @@ type SearchPlace = {
   keyword: string
 }
 
-type RoutePreference = { themes?: string[]; placeCount?: number; pace?: string; food?: string }
+type RoutePreference = { themes?: string[]; placeCount?: number; pace?: string; food?: string | string[]; mood?: string | string[] }
 
 const profiles = [
   { id: 'balance', title: '가까운 곳부터 알차게', label: '동선 균형', emoji: '✨', tags: ['맛집', '감성 카페', '사진'] },
@@ -151,7 +151,9 @@ export async function generateRouteCourses(originName: string, destinationName: 
   preferences.flatMap((preference) => preference.themes ?? []).forEach((theme) => { themeCounts[theme] = (themeCounts[theme] ?? 0) + 1 })
   const topThemes = Object.entries(themeCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko')).map(([theme]) => theme)
   const foodCounts: Record<string, number> = {}
-  preferences.forEach((preference) => { if (preference.food) foodCounts[preference.food] = (foodCounts[preference.food] ?? 0) + 1 })
+  preferences.flatMap((preference) => Array.isArray(preference.food) ? preference.food : preference.food ? [preference.food] : []).forEach((food) => {
+    foodCounts[food] = (foodCounts[food] ?? 0) + 1
+  })
   const topFoods = Object.entries(foodCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko')).map(([food]) => food)
   const tasteKeywords = topThemes.map((theme) => themeKeyword[theme]).filter(Boolean)
   const foodKeywords = topFoods.map((food) => foodKeyword[food]).filter(Boolean)

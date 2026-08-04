@@ -5,10 +5,10 @@ export const foods = ['한식', '고기·구이', '해산물', '일식', '중식
 export const moods = ['감성적인', '활기찬', '조용한', '로컬']
 
 export const demoPreferences: Record<string, Preference> = {
-  minji: { themes: ['맛집', '감성 카페', '사진 명소'], placeCount: 4, food: '한식', mood: '감성적인' },
-  seojun: { themes: ['맛집', '역사·문화', '쇼핑'], placeCount: 6, food: '고기·구이', mood: '로컬' },
-  yuna: { themes: ['감성 카페', '사진 명소', '쇼핑'], placeCount: 2, food: '디저트·베이커리', mood: '감성적인' },
-  hyunwoo: { themes: ['맛집', '액티비티', '사진 명소'], placeCount: 4, food: '한식', mood: '활기찬' },
+  minji: { themes: ['맛집', '감성 카페', '사진 명소'], placeCount: 4, food: ['한식', '디저트·베이커리'], mood: ['감성적인'] },
+  seojun: { themes: ['맛집', '역사·문화', '쇼핑'], placeCount: 6, food: ['고기·구이'], mood: ['로컬', '활기찬'] },
+  yuna: { themes: ['감성 카페', '사진 명소', '쇼핑'], placeCount: 2, food: ['디저트·베이커리', '양식'], mood: ['감성적인', '조용한'] },
+  hyunwoo: { themes: ['맛집', '액티비티', '사진 명소'], placeCount: 4, food: ['한식', '해산물'], mood: ['활기찬'] },
 }
 
 export const initialState: AppState = {

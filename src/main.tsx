@@ -20,6 +20,14 @@ const EVENT_KEY = 'modu-trip-anonymous-events-v1'
 
 type AnonymousEvent = { name: string; at: string }
 
+const toggleSelection = (selected: string[], value: string) => selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]
+const asSelection = (value: string[] | string | undefined) => Array.isArray(value) ? value : value ? [value] : []
+const normalizePreference = (preference: Preference | undefined): Preference | undefined => preference ? {
+  ...preference,
+  food: asSelection(preference.food),
+  mood: asSelection(preference.mood),
+} : undefined
+
 function track(name: string) {
   try {
     const events = JSON.parse(localStorage.getItem(EVENT_KEY) ?? '[]') as AnonymousEvent[]
@@ -34,7 +42,12 @@ function loadState(): AppState {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (!saved) return initialState
     const parsed = JSON.parse(saved) as Partial<AppState>
-    return { ...initialState, ...parsed, trip: { ...initialState.trip, ...parsed.trip } }
+    return {
+      ...initialState,
+      ...parsed,
+      trip: { ...initialState.trip, ...parsed.trip },
+      members: (parsed.members ?? initialState.members).map((member) => ({ ...member, preference: normalizePreference(member.preference) })),
+    }
   } catch {
     return initialState
   }
@@ -107,7 +120,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
   const [name, setName] = useState('')
   const [joining, setJoining] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [preference, setPreference] = useState<Preference>({ themes: [], placeCount: 4, food: '한식', mood: '감성적인' })
+  const [preference, setPreference] = useState<Preference>({ themes: [], placeCount: 4, food: [], mood: [] })
   const [saving, setSaving] = useState(false)
   const [selectedCourseId, setSelectedCourseId] = useState('')
   const [working, setWorking] = useState(false)
@@ -182,7 +195,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
 
   const toggleTheme = (theme: string) => setPreference((current) => ({
     ...current,
-    themes: current.themes.includes(theme) ? current.themes.filter((item) => item !== theme) : current.themes.length < 3 ? [...current.themes, theme] : current.themes,
+    themes: toggleSelection(current.themes, theme),
   }))
 
   const savePreference = async () => {
@@ -283,7 +296,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
         <section className="room-management" aria-label="여행방 관리"><a href="/demo"><RotateCcw size={16} /> 새 여행방 만들기</a>{requester?.host && <button disabled={deleting} onClick={removeRoom}><Trash2 size={16} /> {deleting ? '삭제 중…' : '현재 여행방 삭제'}</button>}</section>
         <section className="live-section"><div className="section-title-row"><h3>함께 가는 친구</h3><span className="count-badge">{snapshot.members.length}/{snapshot.room.expectedMembers}</span></div><div className="member-list">{snapshot.members.map((member) => <div className="member-row" key={member.id}><Avatar member={member} /><div className="member-info"><b>{member.name}{member.id === snapshot.requesterMemberId && <small>나</small>}</b><span>{member.preferenceComplete ? '취향 입력 완료' : '취향 입력 대기 중'}</span></div><span className={member.preferenceComplete ? 'complete-badge' : 'waiting-badge'}>{member.preferenceComplete ? <><Check size={13} /> 완료</> : '대기'}</span></div>)}</div>{!allJoined && <div className="lock-note"><UsersRound size={18} /><div><b>{snapshot.room.expectedMembers - snapshot.members.length}명을 더 기다리고 있어요</b><span>위 초대 링크를 친구에게 보내 주세요.</span></div></div>}</section>
 
-        {requester && !requester.preferenceComplete && <section className="live-card live-preferences"><div className="section-heading"><h2>{requester.name}님의 여행 취향</h2><p>실제 경로에 반영할 테마를 최대 3개 골라 주세요.</p></div><PreferenceGroup title="가장 가고 싶은 장소" options={themes} selected={preference.themes} onSelect={toggleTheme} icons /><PlaceCountControl value={preference.placeCount} onChange={(placeCount) => setPreference((current) => ({ ...current, placeCount }))} /><PreferenceGroup title="좋아하는 음식" options={foods} selected={[preference.food]} onSelect={(value) => setPreference((current) => ({ ...current, food: value }))} /><PreferenceGroup title="원하는 분위기" options={moods} selected={[preference.mood]} onSelect={(value) => setPreference((current) => ({ ...current, mood: value }))} /><button className="primary-button" disabled={preference.themes.length === 0 || saving} onClick={savePreference}>{saving ? '저장 중…' : '취향 저장하기'} <Check size={18} /></button></section>}
+        {requester && !requester.preferenceComplete && <section className="live-card live-preferences"><div className="section-heading"><h2>{requester.name}님의 여행 취향</h2><p>마음에 드는 항목을 여러 개 골라 주세요.</p></div><PreferenceGroup title="가장 가고 싶은 장소" options={themes} selected={preference.themes} onSelect={toggleTheme} icons /><PlaceCountControl value={preference.placeCount} onChange={(placeCount) => setPreference((current) => ({ ...current, placeCount }))} /><PreferenceGroup title="좋아하는 음식 · 복수 선택" options={foods} selected={preference.food} onSelect={(value) => setPreference((current) => ({ ...current, food: toggleSelection(current.food, value) }))} /><PreferenceGroup title="원하는 분위기 · 복수 선택" options={moods} selected={preference.mood} onSelect={(value) => setPreference((current) => ({ ...current, mood: toggleSelection(current.mood, value) }))} /><button className="primary-button" disabled={preference.themes.length === 0 || saving} onClick={savePreference}>{saving ? '저장 중…' : '취향 저장하기'} <Check size={18} /></button></section>}
 
         {!allReady && requester?.preferenceComplete && <div className="lock-note live-wait"><Sparkles size={18} /><div><b>모두의 취향을 기다리는 중이에요</b><span>모든 인원이 참여하고 입력하면 추천 코스가 공개됩니다.</span></div></div>}
 
@@ -511,17 +524,17 @@ function Room({ state, setState }: { state: AppState; setState: React.Dispatch<R
 
 function Preferences({ state, setState }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const member = state.members.find((m) => m.id === state.activeMemberId)!
-  const [form, setForm] = useState<Preference>(member.preference ?? { themes: [], placeCount: 4, food: '한식', mood: '감성적인' })
-  const toggle = (theme: string) => setForm((f) => ({ ...f, themes: f.themes.includes(theme) ? f.themes.filter((t) => t !== theme) : f.themes.length < 3 ? [...f.themes, theme] : f.themes }))
+  const [form, setForm] = useState<Preference>(normalizePreference(member.preference) ?? { themes: [], placeCount: 4, food: [], mood: [] })
+  const toggle = (theme: string) => setForm((f) => ({ ...f, themes: toggleSelection(f.themes, theme) }))
   const save = () => setState((s) => ({ ...s, step: 'room', members: s.members.map((m) => m.id === member.id ? { ...m, preference: form } : m) }))
   return (
     <section className="page">
       <Progress current={2} total={4} label={`${member.name}님의 취향`} />
-      <div className="profile-heading"><Avatar member={member} /><div><h2>{member.name}님은 어떤 여행이 좋아요?</h2><p>최대 3개까지 골라주세요.</p></div></div>
+      <div className="profile-heading"><Avatar member={member} /><div><h2>{member.name}님은 어떤 여행이 좋아요?</h2><p>마음에 드는 항목을 여러 개 골라주세요.</p></div></div>
       <PreferenceGroup title="가장 가고 싶은 장소" options={themes} selected={form.themes} onSelect={toggle} icons />
       <PlaceCountControl value={form.placeCount} onChange={(placeCount) => setForm((current) => ({ ...current, placeCount }))} />
-      <PreferenceGroup title="좋아하는 음식" options={foods} selected={[form.food]} onSelect={(value) => setForm((f) => ({ ...f, food: value }))} />
-      <PreferenceGroup title="원하는 분위기" options={moods} selected={[form.mood]} onSelect={(value) => setForm((f) => ({ ...f, mood: value }))} />
+      <PreferenceGroup title="좋아하는 음식 · 복수 선택" options={foods} selected={form.food} onSelect={(value) => setForm((f) => ({ ...f, food: toggleSelection(f.food, value) }))} />
+      <PreferenceGroup title="원하는 분위기 · 복수 선택" options={moods} selected={form.mood} onSelect={(value) => setForm((f) => ({ ...f, mood: toggleSelection(f.mood, value) }))} />
       <button className="primary-button sticky-action" disabled={form.themes.length === 0} onClick={save}>취향 저장하기 <Check size={18} /></button>
     </section>
   )

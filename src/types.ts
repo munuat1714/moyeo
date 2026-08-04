@@ -2,8 +2,8 @@ export type Preference = {
   themes: string[]
   placeCount: number
   pace?: string
-  food: string
-  mood: string
+  food: string[]
+  mood: string[]
 }
 
 export type Member = {
