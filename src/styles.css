@@ -279,3 +279,26 @@ input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,79,.
   .course-hero { grid-template-columns: auto 1fr; }
   .match-score { grid-column: 2; text-align: left; display: flex; gap: 5px; align-items: baseline; }
 }
+
+/* Minimal visual system: blue is reserved for primary actions and active states. */
+:root { --paper: #f7f8fa; --card: #fff; --line: #e2e5e9; --green-soft: #f3f5f7; --coral-soft: #f3f5f7; --shadow: none; }
+body { background: #fff; }.app-shell { box-shadow: none; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }.landing-mode { border: 0; }.app-header { background: rgba(247,248,250,.96); backdrop-filter: none; }
+.brand-mark { border-radius: 9px; transform: none; }.eyebrow { padding: 0; border-radius: 0; background: transparent; }.eyebrow.dark { background: transparent; }
+.primary-button, .secondary-button, .outline-button, .wizard-back { border-radius: 12px; box-shadow: none; }.secondary-button { color: var(--ink); background: #eef0f2; }.primary-button:not(:disabled):active { transform: none; }
+.form-card, .live-section { gap: 16px; }.route-mode-options > button, .create-review article, .live-card, .course-card, .vote-options > button, .stop-card, .confirmed-route-card, .feedback-card, .interest-card { border-radius: 14px; box-shadow: none; }
+.route-mode-options > button.active, .area-chips button.active, .segmented button.active, .place-count-ranges button.selected { color: var(--green); border-color: var(--green); background: #fff; box-shadow: none; }
+.transport-summary, .expiry-notice, .open-route-note, .drag-move-guide, .route-edit-notice, .lock-note, .safety-note, .data-notice, .common-note { color: var(--ink); border: 1px solid var(--line); background: #fff; }.transport-summary > svg, .expiry-notice svg, .drag-move-guide > svg, .route-edit-notice svg { color: var(--green); }
+.room-action-icons a, .room-action-icons button { border-radius: 11px; box-shadow: none; }.room-action-icons .delete-room-icon { color: var(--muted); }
+.complete-badge, .waiting-badge, .count-badge, .member-info b small { color: var(--muted); background: #eef0f2; }.complete-badge svg { color: var(--green); }
+.choice-grid button.selected, .choice-chips button.selected { color: var(--green); border-color: var(--green); background: #fff; }.choice-grid button.selected svg { color: var(--green); }
+.result-icon, .result-icon.coral { color: var(--green); background: transparent; transform: none; }.taste-bar i, .vote-bar i { background: var(--green); }.insight-card { color: var(--ink); border: 1px solid var(--line); background: #fff; }.insight-title { color: var(--green); opacity: 1; }
+.course-tabs { background: #eef0f2; }.course-tabs button.active { box-shadow: none; }.course-emoji { background: #f3f4f6; }.tag-row span { color: var(--muted); background: #f3f4f6; }.course-place-preview { background: #f7f8fa; }.common-note > span { color: var(--green); border: 1px solid var(--line); background: #fff; }
+.vote-banner { color: var(--ink); border: 1px solid var(--line); border-radius: 14px; background: #fff; }.vote-banner > svg { color: var(--green); }.vote-options > button.selected, .result-list > div.winner { border-color: var(--green); background: #fff; }.voter-select button.active { border-color: var(--green); box-shadow: none; }
+.timeline-pin i, .timeline-pin i.shared { color: var(--green); background: #f3f5f7; }.stop-card em, .replace-place-button, .place-lookup button, .stop-tools .drag-handle { color: var(--green); background: #f3f5f7; }.timeline-stop.drag-over .stop-card { box-shadow: 0 0 0 2px #d8e8ff; }
+.route-place-editor { border-color: var(--line); border-radius: 14px; box-shadow: none; }.route-editor-results button { background: #f7f8fa; }.route-map, .single-day-label { border-radius: 14px; }
+.concept-flow article, .interest-survey, .survey-actions button, .survey-demo-link { border-radius: 14px; }.concept-flow article { background: #fff; }.concept-flow article > span { color: var(--green); background: transparent; }.survey-actions button.selected { box-shadow: none; }
+.simple-footer, .landing-footer { color: var(--muted); }
+
+@media (min-width: 700px) {
+  .app-shell { border-radius: 18px; }
+}
