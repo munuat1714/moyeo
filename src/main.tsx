@@ -609,9 +609,9 @@ function CourseCard({ course, expanded, onToggle }: { course: Course; expanded: 
         <div className="match-score"><b>{course.match}%</b><span>취향 일치</span></div>
       </div>
       <div className="tag-row">{course.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
-      <div className="course-stats"><span><WalletCards size={17} /> 1인 {formatPrice(course.totalPrice)}</span><span><TrainFront size={17} /> 이동 {course.travelMinutes}분</span></div>
+      <div className="course-stats"><span><TrainFront size={17} /> 예상 이동 {course.travelMinutes}분</span><span><MapPin size={17} /> {course.days[0].length}개 지점</span></div>
       <button className="outline-button" onClick={onToggle}>{expanded ? '상세 경로 접기' : '상세 경로 보기'} <ChevronRight size={17} /></button>
-      {expanded && <div className="mini-timeline">{course.days[0].map((stop) => <div key={stop.time + stop.title}><time>{stop.time}</time><i className={stop.shared ? 'shared' : ''} /><span><b>{stop.title}</b><small>{stop.shared ? '공통 일정' : '이 코스만의 일정'}</small></span></div>)}</div>}
+      {expanded && <div className="course-route-detail"><div className="course-route-heading"><Map size={15} /><b>코스 이동 경로</b></div><RouteMap stops={course.days[0]} /><div className="mini-timeline">{course.days[0].map((stop, index) => <div key={stop.time + stop.title}><time>{stop.time}</time><i className={stop.shared ? 'shared' : ''} /><span><b>{index + 1}. {stop.title}</b><small>{stop.category} · {stop.duration}{stop.shared ? ' · 공통 일정' : ''}</small></span></div>)}</div><p className="map-disclaimer">지도 선은 방문 순서를 나타냅니다. 실제 이동 경로와 시간은 네이버지도에서 다시 확인해 주세요.</p></div>}
     </article>
   )
 }
