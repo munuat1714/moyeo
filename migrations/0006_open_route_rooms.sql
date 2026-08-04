@@ -1,0 +1,2 @@
+ALTER TABLE rooms ADD COLUMN route_mode TEXT NOT NULL DEFAULT 'fixed';
+ALTER TABLE rooms ADD COLUMN preferred_area TEXT NOT NULL DEFAULT '상관없음';

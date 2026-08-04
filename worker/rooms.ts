@@ -10,6 +10,7 @@ type RoomRow = {
   transport: string; stay: string; expected_members: number; vote_round: number; runoff_course_ids: string;
   final_course_id: string | null; recommendation_json: string | null; itinerary_json: string | null; created_at: number; expires_at: number;
   recommendation_status: string | null; recommendation_started_at: number | null; recommendation_retry_at: number | null;
+  route_mode: 'fixed' | 'open'; preferred_area: string;
 };
 
 type MemberRow = {
@@ -73,6 +74,7 @@ async function roomSnapshot(db: D1Database, room: RoomRow, request: Request) {
   return {
     room: {
       id: room.id, name: room.name, origin: room.origin, destination: room.destination,
+      routeMode: room.route_mode, preferredArea: room.preferred_area,
       startDate: room.start_date, endDate: room.end_date, transport: room.transport, stay: room.stay,
       expectedMembers: room.expected_members, voteRound: room.vote_round,
       runoffCourseIds: JSON.parse(room.runoff_course_ids), finalCourseId: room.final_course_id,
@@ -90,17 +92,19 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
   if (url.pathname === '/api/rooms' && request.method === 'POST') {
     const body = await readBody(request);
     if (!body) return json({ error: '요청 형식을 확인해 주세요.' }, 400);
-    const name = text(body.name, 50), origin = text(body.origin, 40), destination = text(body.destination, 40);
+    const name = text(body.name, 50), routeMode = body.routeMode === 'open' ? 'open' : 'fixed';
+    const origin = routeMode === 'open' ? '' : text(body.origin, 40), destination = routeMode === 'open' ? '' : text(body.destination, 40);
+    const preferredArea = routeMode === 'open' ? (text(body.preferredArea, 30) || '상관없음') : '상관없음';
     const hostName = text(body.hostName, 20), startDate = text(body.startDate, 10), endDate = text(body.endDate, 10);
-    const transport = text(body.transport, 20), stay = text(body.stay, 30);
+    const transport = routeMode === 'open' ? '대중교통' : text(body.transport, 20), stay = text(body.stay, 30);
     const expectedMembers = Number(body.expectedMembers ?? 4);
-    if (!name || !origin || !destination || !hostName || !startDate || !endDate || !Number.isInteger(expectedMembers) || expectedMembers < 1 || expectedMembers > 6) {
+    if (!name || (routeMode === 'fixed' && (!origin || !destination)) || !hostName || !startDate || !endDate || !Number.isInteger(expectedMembers) || expectedMembers < 1 || expectedMembers > 6) {
       return json({ error: '여행방 필수 정보를 확인해 주세요.' }, 400);
     }
     const roomId = randomRoomId(), memberId = crypto.randomUUID(), token = crypto.randomUUID();
     const now = Math.floor(Date.now() / 1000), expiresAt = roomExpiresAt(now), tokenHash = await hashToken(token);
     await db.batch([
-      db.prepare('INSERT INTO rooms (id,name,origin,destination,start_date,end_date,transport,stay,expected_members,created_at,expires_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)').bind(roomId, name, origin, destination, startDate, endDate, transport, stay, expectedMembers, now, expiresAt),
+      db.prepare('INSERT INTO rooms (id,name,route_mode,preferred_area,origin,destination,start_date,end_date,transport,stay,expected_members,created_at,expires_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)').bind(roomId, name, routeMode, preferredArea, origin, destination, startDate, endDate, transport, stay, expectedMembers, now, expiresAt),
       db.prepare('INSERT INTO members (id,room_id,name,color,is_host,token_hash,created_at) VALUES (?1,?2,?3,?4,1,?5,?6)').bind(memberId, roomId, hostName, COLORS[0], tokenHash, now),
     ]);
     return json({ roomId, memberId, token, expiresAt }, 201);
@@ -162,7 +166,7 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
     }
     try {
       const preferences = members.results.flatMap((item) => item.preference_json ? [JSON.parse(item.preference_json)] : []);
-      const courses = await generateRouteCourses(room.origin, room.destination, searchCredentials, preferences);
+      const courses = await generateRouteCourses(room.origin, room.destination, searchCredentials, preferences, room.route_mode === 'open' ? room.preferred_area : undefined);
       const encoded = JSON.stringify(courses);
       await db.prepare("UPDATE rooms SET recommendation_json = ?1, recommendation_status = 'ready', recommendation_retry_at = NULL WHERE id = ?2 AND recommendation_json IS NULL").bind(encoded, roomId).run();
       const saved = await db.prepare('SELECT recommendation_json FROM rooms WHERE id = ?1').bind(roomId).first<{ recommendation_json: string }>();

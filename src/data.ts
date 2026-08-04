@@ -15,6 +15,8 @@ export const initialState: AppState = {
   step: 'home',
   trip: {
     name: '우리들의 부산 한바퀴',
+    routeMode: 'fixed',
+    preferredArea: '상관없음',
     origin: '',
     destination: '',
     startDate: '2026-08-15',

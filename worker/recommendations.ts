@@ -39,6 +39,13 @@ const profiles = [
   { id: 'active', title: '보고 즐기는 활동 여행', label: '체험 중심', emoji: '⚡', tags: ['액티비티', '맛집', '사진'] },
 ] as const
 
+const openRouteZones = [
+  { label: '서면·전포', query: '서면 전포', latitude: 35.1577, longitude: 129.0630 },
+  { label: '광안리·수영', query: '광안리 수영', latitude: 35.1580, longitude: 129.1180 },
+  { label: '해운대·청사포', query: '해운대 청사포', latitude: 35.1600, longitude: 129.1760 },
+  { label: '남포·광복', query: '남포 광복', latitude: 35.1010, longitude: 129.0300 },
+] as const
+
 const keywordMeta: Record<string, { category: string; duration: string; price: number }> = {
   맛집: { category: '맛집', duration: '1시간 20분', price: 18000 },
   카페: { category: '카페', duration: '1시간', price: 8000 },
@@ -200,8 +207,54 @@ export function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destinati
   return selected
 }
 
-export async function generateRouteCourses(originName: string, destinationName: string, credentials: SearchCredentials, preferences: RoutePreference[] = []): Promise<Course[]> {
+async function generateOpenRouteCourses(preferredArea: string, credentials: SearchCredentials, preferences: RoutePreference[]) {
+  const themeCounts: Record<string, number> = {}
+  preferences.flatMap((preference) => preference.themes ?? []).forEach((theme) => { themeCounts[theme] = (themeCounts[theme] ?? 0) + 1 })
+  const topThemes = Object.entries(themeCounts).sort((a, b) => b[1] - a[1]).map(([theme]) => theme)
+  const teamKeywords = topThemes.map((theme) => themeKeyword[theme]).filter(Boolean)
+  const visitCount = resolveVisitCount(preferences)
+  const selectedZone = openRouteZones.find((zone) => zone.label === preferredArea)
+  const assignments = profiles.map((profile, index) => ({ profile, zone: selectedZone ?? openRouteZones[index] }))
+  const profileKeyword: Record<string, string> = { balance: '맛집', slow: '카페', active: '체험' }
+  const jobs = assignments.flatMap(({ profile, zone }) => [profileKeyword[profile.id], teamKeywords[0] ?? '관광명소'].map((keyword) => ({ zone, keyword })))
+    .filter((job, index, all) => all.findIndex((item) => item.zone.label === job.zone.label && item.keyword === job.keyword) === index)
+  const batches = await mapWithConcurrency(jobs, 2, async ({ zone, keyword }) => {
+    try { return await search(`부산 ${zone.query} ${keyword}`, keyword, credentials) }
+    catch (reason) {
+      console.warn('naver-open-route-search-skipped', { zone: zone.label, keyword, reason: reason instanceof Error ? reason.message : String(reason) })
+      return []
+    }
+  })
+  const liveByZone = new Map<string, SearchPlace[]>()
+  jobs.forEach((job, index) => liveByZone.set(job.zone.label, [...(liveByZone.get(job.zone.label) ?? []), ...batches[index]]))
+  const usedAcrossCourses = new Set<string>()
+
+  return assignments.map(({ profile, zone }) => {
+    const center: SearchPlace = { title: `${zone.label} 중심`, category: '권역', roadAddress: '', latitude: zone.latitude, longitude: zone.longitude, keyword: '관광명소' }
+    const live = liveByZone.get(zone.label) ?? []
+    const liveNearby = live.filter((place) => distanceKm(center, place) <= 3)
+    const liveExpanded = live.filter((place) => distanceKm(center, place) <= 6)
+    const nearbyFallback = curatedFallbackPlaces.filter((place) => distanceKm(center, place) <= 3)
+    const expandedFallback = curatedFallbackPlaces.filter((place) => distanceKm(center, place) <= 6)
+    const pool = [...liveNearby, ...nearbyFallback, ...(liveNearby.length + nearbyFallback.length < visitCount ? [...liveExpanded, ...expandedFallback] : [])]
+      .filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
+    const selected = selectPlaces(pool, center, center, profile.id, teamKeywords, visitCount, usedAcrossCourses)
+    selected.forEach((place) => usedAcrossCourses.add(place.title))
+    const ordered = nearestOrder(selected, center)
+    const routeKm = ordered.slice(1).reduce((sum, point, index) => sum + distanceKm(ordered[index], point), 0)
+    return {
+      id: profile.id, title: `${zone.label} ${profile.title}`, label: profile.label, emoji: profile.emoji,
+      description: `${zone.label} 소권역 안에서 대중교통 누적 이동을 줄인 당일치기 코스`, match: 80,
+      tags: [...new Set([...topThemes, ...profile.tags])].slice(0, 4), totalPrice: 0,
+      travelMinutes: Math.max(10, Math.round(routeKm * 5)),
+      days: [[...ordered.map((place, index) => routeStop(place.title, visitTime(index, ordered.length), place))]],
+    }
+  })
+}
+
+export async function generateRouteCourses(originName: string, destinationName: string, credentials: SearchCredentials, preferences: RoutePreference[] = [], preferredArea?: string): Promise<Course[]> {
   if (!credentials.clientId || !credentials.clientSecret) throw new Error('네이버 지역검색 설정이 필요합니다.')
+  if (preferredArea) return generateOpenRouteCourses(preferredArea, credentials, preferences)
   const [originResults, destinationResults] = await Promise.all([
     search(`부산 ${originName}`, '출발지', credentials, 1),
     search(`부산 ${destinationName}`, '도착지', credentials, 1),

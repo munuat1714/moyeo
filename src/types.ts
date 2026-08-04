@@ -45,6 +45,8 @@ export type Course = {
 
 export type Trip = {
   name: string
+  routeMode: 'fixed' | 'open'
+  preferredArea: string
   origin: string
   destination: string
   startDate: string
