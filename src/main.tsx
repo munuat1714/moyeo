@@ -6,7 +6,7 @@ import {
   ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign,
   Clock3, Coffee, Compass, Copy, ExternalLink, Home, Map, MapPin, MessageCircle,
   RotateCcw, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, TrainFront, Trash2,
-  MousePointerClick, UserRound, UsersRound, Utensils, Vote, WalletCards, X,
+  GripVertical, UserRound, UsersRound, Utensils, Vote, WalletCards, X,
 } from 'lucide-react'
 import { courses, demoPreferences, foods, initialState, moods, themes } from './data'
 import { aggregateThemes, allPreferencesComplete, formatPrice, recommendCourses, reorderStops, tallyVotes } from './logic'
@@ -805,18 +805,19 @@ function FinalTrip({ courses, state, setState, tab, setTab }: { courses: Course[
 }
 
 function Timeline({ stops, onRemove, onMove, onEdit, disabled, renderAfter }: { stops: Stop[]; onRemove?: (index: number) => void; onMove?: (index: number, direction: number) => void; onEdit?: (index: number) => void; disabled?: boolean; renderAfter?: (index: number) => React.ReactNode }) {
-  const [moveSource, setMoveSource] = useState<number | null>(null)
-  useEffect(() => setMoveSource(null), [stops])
+  const [dragSource, setDragSource] = useState<number | null>(null)
+  const [dragTarget, setDragTarget] = useState<number | null>(null)
+  useEffect(() => { setDragSource(null); setDragTarget(null) }, [stops])
+  const finishDrag = () => {
+    if (dragSource !== null && dragTarget !== null && dragSource !== dragTarget) onMove?.(dragSource, dragTarget - dragSource)
+    setDragSource(null); setDragTarget(null)
+  }
   if (stops.length === 0) return <div className="empty-schedule"><CalendarDays size={22} /><b>이 날짜의 일정이 비었어요.</b><span>처음부터 다시 시작하면 원래 추천 일정을 불러올 수 있어요.</span></div>
-  return <div className="timeline">{onMove && <div className="click-move-guide"><MousePointerClick size={16} /><span><b>모바일에서는 눌러서 순서를 바꿀 수 있어요</b><small>옮길 장소의 `순서 이동`을 누른 뒤 원하는 위치를 누르세요.</small></span></div>}{stops.map((stop, index) => {
+  return <div className="timeline">{onMove && <div className="drag-move-guide"><GripVertical size={16} /><span><b>손잡이를 끌어서 순서를 바꿔보세요</b><small>장소 오른쪽의 이동 손잡이를 원하는 위치까지 드래그하세요.</small></span></div>}{stops.map((stop, index) => {
     const after = renderAfter?.(index)
-    const moveSelected = moveSource === index
-    const chooseMove = () => {
-      if (moveSource === null || moveSelected) { setMoveSource(moveSelected ? null : index); return }
-      onMove?.(moveSource, index - moveSource)
-      setMoveSource(null)
-    }
-    return <React.Fragment key={`${stop.time}-${stop.title}-${index}`}><div className={`timeline-stop ${moveSelected ? 'move-selected' : ''}`}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className="stop-card"><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onMove && <><button disabled={disabled || index === 0} aria-label={`${stop.title} 위로 이동`} onClick={() => onMove(index, -1)}><ChevronUp size={14} /></button><button disabled={disabled || index === stops.length - 1} aria-label={`${stop.title} 아래로 이동`} onClick={() => onMove(index, 1)}><ChevronDown size={14} /></button></>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><b>{stop.title}</b><p>{stop.description}</p>{onMove && <button type="button" className={`click-move-button ${moveSelected ? 'selected' : moveSource !== null ? 'target' : ''}`} disabled={disabled} onClick={chooseMove}><MousePointerClick size={14} />{moveSelected ? '이동 선택 취소' : moveSource !== null ? '이 위치로 이동' : '순서 이동'}</button>}{onEdit && <button className="replace-place-button" disabled={disabled} onClick={() => onEdit(index)}><MapPin size={13} /> 장소 변경</button>}<div className="stop-footer"><small>{stop.source ?? '운영자 검수'}{stop.verifiedAt ? ` · ${stop.verifiedAt} 확인` : ''}</small></div><PlaceLookup stop={stop} /></div></div>{after && <div className="inline-route-editor">{after}</div>}</React.Fragment>
+    const dragging = dragSource === index
+    const dragOver = dragSource !== null && dragTarget === index && !dragging
+    return <React.Fragment key={`${stop.time}-${stop.title}-${index}`}><div data-stop-index={index} className={`timeline-stop ${dragging ? 'dragging' : ''} ${dragOver ? 'drag-over' : ''}`}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className="stop-card"><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onMove && <><button disabled={disabled || index === 0} aria-label={`${stop.title} 위로 이동`} onClick={() => onMove(index, -1)}><ChevronUp size={14} /></button><button disabled={disabled || index === stops.length - 1} aria-label={`${stop.title} 아래로 이동`} onClick={() => onMove(index, 1)}><ChevronDown size={14} /></button><button type="button" className="drag-handle" disabled={disabled} aria-label={`${stop.title} 드래그해서 순서 이동`} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setDragSource(index); setDragTarget(index) }} onPointerMove={(event) => { if (dragSource === null) return; const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-stop-index]'); if (target) setDragTarget(Number(target.dataset.stopIndex)) }} onPointerUp={finishDrag} onPointerCancel={() => { setDragSource(null); setDragTarget(null) }}><GripVertical size={16} /></button></>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><b>{stop.title}</b><p>{stop.description}</p>{onEdit && <button className="replace-place-button" disabled={disabled} onClick={() => onEdit(index)}><MapPin size={13} /> 장소 변경</button>}<div className="stop-footer"><small>{stop.source ?? '운영자 검수'}{stop.verifiedAt ? ` · ${stop.verifiedAt} 확인` : ''}</small></div><PlaceLookup stop={stop} /></div></div>{after && <div className="inline-route-editor">{after}</div>}</React.Fragment>
   })}</div>
 }
 
