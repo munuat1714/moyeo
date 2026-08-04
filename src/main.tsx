@@ -62,6 +62,7 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
     : { ...loadState(), step: 'home' })
   const [selectedCourseId, setSelectedCourseId] = useState(courses[0].id)
   const [finalTab, setFinalTab] = useState<'schedule' | 'map' | 'booking'>('schedule')
+  const [createStage, setCreateStage] = useState(1)
   const recommendedCourses = useMemo(() => recommendCourses(courses, state.members), [state.members])
   const selectedCourse = recommendedCourses.find((course) => course.id === selectedCourseId) ?? recommendedCourses[0]
 
@@ -73,6 +74,7 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
     localStorage.removeItem(STORAGE_KEY)
     setState({ ...initialState, trip: { ...initialState.trip }, members: initialState.members.map((member) => ({ ...member })), step: isDemo ? 'create' : 'home' })
     setSelectedCourseId(courses[0].id)
+    setCreateStage(1)
   }
 
   const headerBack: Partial<Record<AppState['step'], AppState['step']>> = {
@@ -84,7 +86,7 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
     <div className={`app-shell ${state.step === 'home' ? 'landing-mode' : ''}`}>
       <header className="app-header">
         {state.step !== 'home' ? (
-          <button className="icon-button" aria-label="뒤로 가기" onClick={() => update({ step: headerBack[state.step] ?? 'home' })}>
+          <button className="icon-button" aria-label="뒤로 가기" onClick={() => state.step === 'create' && createStage > 1 ? setCreateStage((stage) => stage - 1) : update({ step: headerBack[state.step] ?? 'home' })}>
             <ArrowLeft size={21} />
           </button>
         ) : <div className="brand-mark">ㅁ</div>}
@@ -96,7 +98,7 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
 
       <main>
         {state.step === 'home' && <HomeScreen />}
-        {state.step === 'create' && <CreateTrip state={state} setState={setState} />}
+        {state.step === 'create' && <CreateTrip state={state} setState={setState} stage={createStage} setStage={setCreateStage} />}
         {state.step === 'room' && <Room state={state} setState={setState} />}
         {state.step === 'preferences' && <Preferences state={state} setState={setState} />}
         {state.step === 'analysis' && <Analysis state={state} onNext={() => update({ step: 'courses' })} />}
@@ -377,7 +379,7 @@ function HomeScreen() {
   )
 }
 
-function CreateTrip({ state, setState }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
+function CreateTrip({ state, setState, stage, setStage }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>>; stage: number; setStage: React.Dispatch<React.SetStateAction<number>> }) {
   const setTrip = (field: string, value: string) => setState((s) => ({ ...s, trip: { ...s.trip, [field]: value } }))
   const [hostName, setHostName] = useState('민지')
   const [expectedMembers, setExpectedMembers] = useState(4)
@@ -387,6 +389,10 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
   const [destinationSelected, setDestinationSelected] = useState(false)
   const openAreas = ['상관없음', '서면·전포', '광안리·수영', '해운대·청사포', '남포·광복']
   const openRoute = state.trip.routeMode === 'open'
+  const stageLabels = ['코스 추천 방식', openRoute ? '선호 권역' : '여행 경로', '여행방 정보', '입력 내용 확인']
+  const canContinue = stage === 1
+    || (stage === 2 && (openRoute || (originSelected && destinationSelected)))
+    || (stage === 3 && Boolean(state.trip.name.trim() && state.trip.startDate && hostName.trim()))
   const createRoom = async () => {
     setCreating(true); setError('')
     try {
@@ -398,21 +404,26 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
       setCreating(false)
     }
   }
+  const next = () => { setError(''); setStage((current) => Math.min(4, current + 1)) }
+  const previous = () => { setError(''); setStage((current) => Math.max(1, current - 1)) }
   return (
-    <section className="page">
-      <Progress current={1} total={4} label="여행 기본 정보" />
-      <div className="section-heading">
-        <h2>{openRoute ? '부산 안에서 가까운 코스를 찾아볼까요?' : '어디서 어디로 떠날까요?'}</h2>
-        <p>{openRoute ? '출발·도착을 정하지 않아도 대중교통 이동이 짧은 권역별 코스를 추천해요.' : '출발 장소와 도착 장소를 직접 입력해 주세요.'}</p>
-      </div>
-      <div className="form-card">
-        <label>코스 추천 방식
-          <div className="route-mode-options">
-            <button type="button" className={!openRoute ? 'active' : ''} onClick={() => setTrip('routeMode', 'fixed')}><MapPin size={18} /><span><b>출발·도착 직접 설정</b><small>정한 장소 사이에서 추천</small></span></button>
-            <button type="button" className={openRoute ? 'active' : ''} onClick={() => { setTrip('routeMode', 'open'); setTrip('transport', '대중교통') }}><TrainFront size={18} /><span><b>부산 코스부터 추천</b><small>출발·도착 없이 가까운 동선</small></span></button>
-          </div>
-        </label>
-        <label>여행방 이름<input value={state.trip.name} onChange={(e) => setTrip('name', e.target.value)} /></label>
+    <section className="page create-wizard">
+      <Progress current={stage} total={4} label={stageLabels[stage - 1]} />
+
+      {stage === 1 && <>
+        <div className="section-heading"><h2>어떤 방식으로 여행할까요?</h2><p>여행 장소가 정해졌는지 알려주세요.</p></div>
+        <div className="route-mode-options route-mode-cards" role="radiogroup" aria-label="코스 추천 방식">
+          <button type="button" role="radio" aria-checked={!openRoute} className={!openRoute ? 'active' : ''} onClick={() => setTrip('routeMode', 'fixed')}><MapPin size={22} /><span><b>출발·도착 직접 설정</b><small>정한 장소 사이에서 실제 장소를 추천해요.</small></span></button>
+          <button type="button" role="radio" aria-checked={openRoute} className={openRoute ? 'active' : ''} onClick={() => { setTrip('routeMode', 'open'); setTrip('transport', '대중교통') }}><TrainFront size={22} /><span><b>부산 코스부터 추천</b><small>출발·도착 없이 이동이 짧은 권역을 찾아요.</small></span></button>
+        </div>
+      </>}
+
+      {stage === 2 && <>
+        <div className="section-heading">
+          <h2>{openRoute ? '어느 지역을 여행하고 싶나요?' : '어디서 어디로 여행할까요?'}</h2>
+          <p>{openRoute ? '모르면 상관없음을 선택해 주세요.' : '부산의 실제 장소를 검색해서 선택해 주세요.'}</p>
+        </div>
+        <div className="form-card">
         {!openRoute ? <>
           <div className="route-input-heading"><b>여행 경로</b><button type="button" onClick={() => { setTrip('origin', ''); setTrip('destination', ''); setOriginSelected(false); setDestinationSelected(false) }}>입력 지우기</button></div>
           <div className="field-row route-fields">
@@ -420,27 +431,50 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
             <ArrowRight size={19} className="field-arrow" />
             <LocationSearchField label="도착 장소" placeholder="식당·숙소·역 이름 검색" value={state.trip.destination} onChange={(value) => setTrip('destination', value)} selected={destinationSelected} onSelectedChange={setDestinationSelected} />
           </div>
-          <small className="route-data-note">검색 결과에서 실제 장소를 선택해 주세요. 현재 부산 지역 장소를 지원합니다.</small>
-        </> : <label>선호 권역 <small>모르면 상관없음을 선택하세요</small>
-          <div className="area-chips">{openAreas.map((area) => <button type="button" key={area} className={state.trip.preferredArea === area ? 'active' : ''} onClick={() => setTrip('preferredArea', area)}>{area}</button>)}</div>
-          <span className="open-route-note"><TrainFront size={15} /> 같은 권역 안에서 대중교통 누적 이동 45~60분 이내를 우선해요.</span>
-        </label>}
-        <label>여행 날짜<input type="date" value={state.trip.startDate} onChange={(e) => { setTrip('startDate', e.target.value); setTrip('endDate', e.target.value) }} /></label>
-        {!openRoute ? <label>이동수단
-          <div className="segmented">
-            {['대중교통', '자동차'].map((item) => <button type="button" className={state.trip.transport === item ? 'active' : ''} onClick={() => setTrip('transport', item)} key={item}>{item === '대중교통' ? <TrainFront size={17} /> : <Compass size={17} />}{item}</button>)}
-          </div>
-        </label> : <div className="transport-summary"><TrainFront size={17} /><span><b>대중교통 기준</b><small>도보와 환승 대기시간을 포함해 가까운 동선을 구성해요.</small></span></div>}
-        <label>내 별명<input maxLength={20} value={hostName} onChange={(e) => setHostName(e.target.value)} /></label>
-        <label>함께 갈 인원
-          <div className="segmented member-count">
-            {[1, 2, 3, 4, 5, 6].map((count) => <button type="button" className={expectedMembers === count ? 'active' : ''} onClick={() => setExpectedMembers(count)} key={count}>{count}명</button>)}
-          </div>
-        </label>
-        <div className="expiry-notice"><Clock3 size={16} /><span>여행방과 별명·취향·투표 데이터는 생성일로부터 <b>7일 후 자동 삭제</b>됩니다.</span></div>
-      </div>
+          <small className="route-data-note">검색 결과에서 실제 장소를 선택해야 다음 단계로 이동할 수 있어요.</small>
+          <label>이동수단
+            <div className="segmented">
+              {['대중교통', '자동차'].map((item) => <button type="button" className={state.trip.transport === item ? 'active' : ''} onClick={() => setTrip('transport', item)} key={item}>{item === '대중교통' ? <TrainFront size={17} /> : <Compass size={17} />}{item}</button>)}
+            </div>
+          </label>
+        </> : <>
+          <label>선호 권역
+            <div className="area-chips area-grid">{openAreas.map((area) => <button type="button" key={area} className={state.trip.preferredArea === area ? 'active' : ''} onClick={() => setTrip('preferredArea', area)}>{area}</button>)}</div>
+          </label>
+          <div className="transport-summary"><TrainFront size={17} /><span><b>대중교통 기준</b><small>{state.trip.preferredArea === '상관없음' ? '서로 다른 부산 권역에서 이동이 짧은 코스 3개를 만들어요.' : '같은 권역 안에서 도보와 환승을 포함한 가까운 동선을 만들어요.'}</small></span></div>
+        </>}
+        </div>
+      </>}
+
+      {stage === 3 && <>
+        <div className="section-heading"><h2>여행방 정보를 알려주세요</h2><p>친구들이 알아보기 쉬운 이름과 여행 날짜를 정해 주세요.</p></div>
+        <div className="form-card">
+          <label>여행방 이름<input value={state.trip.name} onChange={(event) => setTrip('name', event.target.value)} placeholder="예: 우리들의 부산 여행" /></label>
+          <label>여행 날짜<input type="date" value={state.trip.startDate} onChange={(event) => { setTrip('startDate', event.target.value); setTrip('endDate', event.target.value) }} /></label>
+          <label>내 별명<input maxLength={20} value={hostName} onChange={(event) => setHostName(event.target.value)} placeholder="예: 민지" /></label>
+          <label>함께 갈 인원
+            <div className="segmented member-count">{[1, 2, 3, 4, 5, 6].map((count) => <button type="button" className={expectedMembers === count ? 'active' : ''} onClick={() => setExpectedMembers(count)} key={count}>{count}명</button>)}</div>
+          </label>
+          <div className="expiry-notice"><Clock3 size={16} /><span>여행방과 별명·취향·투표 데이터는 생성일로부터 <b>7일 후 자동 삭제</b>됩니다.</span></div>
+        </div>
+      </>}
+
+      {stage === 4 && <>
+        <div className="section-heading"><h2>이 내용으로 여행방을 만들까요?</h2><p>잘못 입력한 내용은 항목별로 돌아가 수정할 수 있어요.</p></div>
+        <div className="create-review">
+          <article><span><small>코스 추천 방식</small><b>{openRoute ? '부산 코스부터 추천' : '출발·도착 직접 설정'}</b><em>{openRoute ? `${state.trip.preferredArea} · 대중교통` : `${state.trip.origin} → ${state.trip.destination} · ${state.trip.transport}`}</em></span><button type="button" onClick={() => setStage(1)}>변경</button></article>
+          <article><span><small>여행방 정보</small><b>{state.trip.name}</b><em>{state.trip.startDate} · {expectedMembers}명</em></span><button type="button" onClick={() => setStage(3)}>변경</button></article>
+          <article><span><small>방장</small><b>{hostName}</b><em>생성 후 7일 뒤 자동 삭제</em></span></article>
+        </div>
+      </>}
+
       {error && <div className="form-error" role="alert">{error}</div>}
-      <button className="primary-button sticky-action" disabled={creating || (!openRoute && (!originSelected || !destinationSelected)) || !state.trip.startDate || !hostName.trim()} onClick={createRoom}>{creating ? '여행방 만드는 중…' : '여행방 만들기'} <ArrowRight size={18} /></button>
+      <div className="wizard-actions">
+        {stage > 1 && <button type="button" className="wizard-back" disabled={creating} onClick={previous}>이전</button>}
+        {stage < 4
+          ? <button type="button" className="primary-button" disabled={!canContinue} onClick={next}>다음 <ArrowRight size={18} /></button>
+          : <button type="button" className="primary-button" disabled={creating} onClick={createRoom}>{creating ? '여행방 만드는 중…' : '여행방 만들기'} <ArrowRight size={18} /></button>}
+      </div>
     </section>
   )
 }
