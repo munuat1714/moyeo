@@ -603,7 +603,7 @@ function CourseCard({ course, expanded, onToggle }: { course: Course; expanded: 
       </div>
       <div className="tag-row">{course.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
       <div className="course-stats"><span><WalletCards size={17} /> 1인 {formatPrice(course.totalPrice)}</span><span><TrainFront size={17} /> 이동 {course.travelMinutes}분</span></div>
-      <button className="outline-button" onClick={onToggle}>{expanded ? '일정 접기' : '상세 일정 보기'} <ChevronRight size={17} /></button>
+      <button className="outline-button" onClick={onToggle}>{expanded ? '상세 경로 접기' : '상세 경로 보기'} <ChevronRight size={17} /></button>
       {expanded && <div className="mini-timeline">{course.days[0].map((stop) => <div key={stop.time + stop.title}><time>{stop.time}</time><i className={stop.shared ? 'shared' : ''} /><span><b>{stop.title}</b><small>{stop.shared ? '공통 일정' : '이 코스만의 일정'}</small></span></div>)}</div>}
     </article>
   )
