@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { courses, demoPreferences, foods, initialState, moods, themes } from './data'
 import { aggregateThemes, allPreferencesComplete, formatPrice, recommendCourses, tallyVotes } from './logic'
-import { clearRoomToken, createLiveRoom, deleteLiveRoom, fetchLiveItinerary, fetchLiveRecommendations, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLiveItinerary, saveLivePreference, saveRoomToken, submitLiveVote } from './live'
+import { clearRoomToken, createLiveRoom, deleteLiveRoom, fetchLiveItinerary, fetchLiveRecommendations, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLiveItinerary, saveLivePreference, saveRoomToken, startLiveRoomWithCurrentMembers, submitLiveVote } from './live'
 import type { LiveSnapshot } from './live'
 import type { AppState, Course, Preference, Stop } from './types'
 import './styles.css'
@@ -129,6 +129,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
   const [recommendationLoading, setRecommendationLoading] = useState(false)
   const [recommendationError, setRecommendationError] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [startingCurrent, setStartingCurrent] = useState(false)
   const [itinerary, setItinerary] = useState<Stop[][] | null>(null)
   const [editingStop, setEditingStop] = useState<{ day: number; index: number } | null>(null)
   const [itinerarySaving, setItinerarySaving] = useState(false)
@@ -162,6 +163,9 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
     ? recommended.filter((course) => snapshot.room.runoffCourseIds.includes(course.id))
     : recommended
   const finalCourse = recommended.find((course) => course.id === snapshot?.room.finalCourseId)
+  const recommendationSummary = snapshot?.room.routeMode === 'open'
+    ? `${snapshot.room.preferredArea === '상관없음' ? '부산의 서로 다른 권역' : snapshot.room.preferredArea}에서 이동이 짧은 실제 장소를 우선했어요.`
+    : `${snapshot?.room.origin}에서 ${snapshot?.room.destination}까지 가까운 실제 장소를 우선했어요.`
 
   const loadRecommendations = async () => {
     setRecommendationLoading(true); setRecommendationError('')
@@ -235,6 +239,14 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
     }
   }
 
+  const startWithCurrentMembers = async () => {
+    if (!window.confirm(`현재 참여한 ${snapshot?.members.length ?? 0}명으로 시작할까요? 이후에는 새 친구가 참여할 수 없습니다.`)) return
+    setStartingCurrent(true); setError('')
+    try { await startLiveRoomWithCurrentMembers(roomId); await refresh() }
+    catch (reason) { setError(reason instanceof Error ? reason.message : '현재 인원으로 시작하지 못했습니다.') }
+    finally { setStartingCurrent(false) }
+  }
+
   const vote = async () => {
     if (!selectedCourseId) return
     setWorking(true); setError('')
@@ -292,13 +304,13 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
   const expires = new Date(snapshot.room.expiresAt * 1000).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   const voteCounts = Object.values(snapshot.votes).reduce<Record<string, number>>((counts, id) => ({ ...counts, [id]: (counts[id] ?? 0) + 1 }), {})
   const roomControls = <section className="room-action-icons" aria-label="여행방 관리">
-    <button type="button" onClick={copyInvite} aria-label={copied ? '초대 링크 복사 완료' : '친구 초대 링크 복사'} title={copied ? '복사 완료' : '친구 초대 링크 복사'}>{copied ? <Check size={19} /> : <Copy size={19} />}</button>
-    <a href="/demo" aria-label="새 여행방 만들기" title="새 여행방 만들기"><RotateCcw size={19} /></a>
-    {requester?.host && <button type="button" className="delete-room-icon" disabled={deleting} onClick={removeRoom} aria-label={deleting ? '여행방 삭제 중' : '현재 여행방 삭제'} title="현재 여행방 삭제"><Trash2 size={19} /></button>}
+    <button type="button" onClick={copyInvite} aria-label={copied ? '초대 링크 복사 완료' : '친구 초대 링크 복사'}>{copied ? <Check size={19} /> : <Copy size={19} />}<span>{copied ? '복사 완료' : '초대'}</span></button>
+    <a href="/demo" aria-label="새 여행방 만들기"><RotateCcw size={19} /><span>새 여행</span></a>
+    {requester?.host && <button type="button" className="delete-room-icon" disabled={deleting} onClick={removeRoom} aria-label={deleting ? '여행방 삭제 중' : '현재 여행방 삭제'}><Trash2 size={19} /><span>삭제</span></button>}
   </section>
 
   return <div className="app-shell live-room-shell">
-    <header className="app-header"><a className="icon-button" href="/demo" aria-label="데모 홈"><Home size={18} /></a><div className="header-title">실시간 여행방</div><span className="live-code">{roomId}</span></header>
+    <header className="app-header"><a className="icon-button" href="/demo" aria-label="데모 홈"><Home size={18} /></a><div className="header-title">실시간 여행방</div><span className="live-code" title="여행방 코드">방 코드 {roomId}</span></header>
     <main className="page">
       <div className="trip-summary live-trip"><span className="eyebrow dark"><CalendarDays size={14} /> {snapshot.room.startDate}</span><h2>{snapshot.room.name}</h2><div className="trip-meta"><span>{snapshot.room.routeMode === 'open' ? <><TrainFront size={15} /> {snapshot.room.preferredArea === '상관없음' ? '부산 소권역 추천' : snapshot.room.preferredArea}</> : <><MapPin size={15} /> {snapshot.room.origin} → {snapshot.room.destination}</>}</span><span><UsersRound size={15} /> {snapshot.members.length}/{snapshot.room.expectedMembers}명</span></div></div>
       <div className="expiry-notice"><Clock3 size={16} /><span><b>{expires}</b>까지 이용할 수 있으며 이후 자동 삭제됩니다.</span></div>
@@ -306,15 +318,15 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
 
       {!snapshot.requesterMemberId ? <section className="live-card join-card"><span className="result-icon"><UsersRound /></span><h2>친구들과 여행을 준비해요</h2><p>연락처 없이 별명만 입력하면 참여할 수 있어요.</p><label>내 별명<input maxLength={20} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void join()} placeholder="예: 민지" /></label><button className="primary-button" disabled={!name.trim() || joining} onClick={join}>{joining ? '참여하는 중…' : '여행방 참여하기'} <ArrowRight size={18} /></button></section> : <>
         {!finalCourse && roomControls}
-        {!finalCourse && <section className="live-section"><div className="section-title-row"><h3>함께 가는 친구</h3><span className="count-badge">{snapshot.members.length}/{snapshot.room.expectedMembers}</span></div><div className="member-list">{snapshot.members.map((member) => <div className="member-row" key={member.id}><Avatar member={member} /><div className="member-info"><b>{member.name}{member.id === snapshot.requesterMemberId && <small>나</small>}</b><span>{member.preferenceComplete ? '취향 입력 완료' : '취향 입력 대기 중'}</span></div><span className={member.preferenceComplete ? 'complete-badge' : 'waiting-badge'}>{member.preferenceComplete ? <><Check size={13} /> 완료</> : '대기'}</span></div>)}</div>{!allJoined && <div className="lock-note"><UsersRound size={18} /><div><b>{snapshot.room.expectedMembers - snapshot.members.length}명을 더 기다리고 있어요</b><span>위 초대 링크를 친구에게 보내 주세요.</span></div></div>}</section>}
+        {!finalCourse && <section className="live-section"><div className="section-title-row"><h3>함께 가는 친구</h3><span className="count-badge">{snapshot.members.length}/{snapshot.room.expectedMembers}</span></div><div className="member-list">{snapshot.members.map((member) => <div className="member-row" key={member.id}><Avatar member={member} /><div className="member-info"><b>{member.name}{member.id === snapshot.requesterMemberId && <small>나</small>}</b><span>{member.preferenceComplete ? '취향 입력 완료' : '취향 입력 대기 중'}</span></div><span className={member.preferenceComplete ? 'complete-badge' : 'waiting-badge'}>{member.preferenceComplete ? <><Check size={13} /> 완료</> : '대기'}</span></div>)}</div>{!allJoined && <div className="lock-note capacity-note"><UsersRound size={18} /><div><b>{snapshot.room.expectedMembers - snapshot.members.length}명을 더 기다리고 있어요</b><span>초대 링크를 보내거나 현재 참여 인원으로 시작할 수 있어요.</span>{requester?.host && <button type="button" disabled={startingCurrent} onClick={startWithCurrentMembers}>{startingCurrent ? '변경 중…' : `현재 ${snapshot.members.length}명으로 시작`}</button>}</div></div>}</section>}
 
-        {requester && !requester.preferenceComplete && <section className="live-card live-preferences"><div className="section-heading"><h2>{requester.name}님의 여행 취향</h2><p>마음에 드는 항목을 여러 개 골라 주세요.</p></div><PreferenceGroup title="가장 가고 싶은 장소" options={themes} selected={preference.themes} onSelect={toggleTheme} icons /><PlaceCountControl value={preference.placeCount} onChange={(placeCount) => setPreference((current) => ({ ...current, placeCount }))} /><PreferenceGroup title="좋아하는 음식 · 복수 선택" options={foods} selected={preference.food} onSelect={(value) => setPreference((current) => ({ ...current, food: toggleSelection(current.food, value) }))} /><PreferenceGroup title="원하는 분위기 · 복수 선택" options={moods} selected={preference.mood} onSelect={(value) => setPreference((current) => ({ ...current, mood: toggleSelection(current.mood, value) }))} /><button className="primary-button" disabled={preference.themes.length === 0 || saving} onClick={savePreference}>{saving ? '저장 중…' : '취향 저장하기'} <Check size={18} /></button></section>}
+        {requester && !requester.preferenceComplete && <section className="live-card live-preferences"><div className="section-heading"><h2>{requester.name}님의 여행 취향</h2><p>마음에 드는 항목을 여러 개 골라 주세요.</p></div><PreferenceGroup title="가장 가고 싶은 장소" options={themes} selected={preference.themes} onSelect={toggleTheme} icons /><PlaceCountControl openRoute={snapshot.room.routeMode === 'open'} value={preference.placeCount} onChange={(placeCount) => setPreference((current) => ({ ...current, placeCount }))} /><PreferenceGroup title="좋아하는 음식 · 복수 선택" options={foods} selected={preference.food} onSelect={(value) => setPreference((current) => ({ ...current, food: toggleSelection(current.food, value) }))} /><PreferenceGroup title="원하는 분위기 · 복수 선택" options={moods} selected={preference.mood} onSelect={(value) => setPreference((current) => ({ ...current, mood: toggleSelection(current.mood, value) }))} /><button className="primary-button" disabled={preference.themes.length === 0 || saving} onClick={savePreference}>{saving ? '저장 중…' : '취향 저장하기'} <Check size={18} /></button></section>}
 
         {!allReady && requester?.preferenceComplete && <div className="lock-note live-wait"><Sparkles size={18} /><div><b>모두의 취향을 기다리는 중이에요</b><span>모든 인원이 참여하고 입력하면 추천 코스가 공개됩니다.</span></div></div>}
 
         {allReady && recommendationLoading && <div className="lock-note live-wait"><Sparkles size={18} /><div><b>{snapshot.room.routeMode === 'open' ? '대중교통 이동이 짧은 부산 권역을 찾고 있어요' : `${snapshot.room.origin} → ${snapshot.room.destination} 주변을 찾고 있어요`}</b><span>실제 장소 좌표와 이동 거리를 비교해 가까운 코스를 구성합니다.</span></div></div>}
         {allReady && recommendationError && <div className="live-card recommendation-error"><b>경로 기반 추천을 만들지 못했어요</b><span>{recommendationError}</span><button className="secondary-button" onClick={() => { setRecommendationError(''); void loadRecommendations() }}>다시 추천하기</button></div>}
-        {allReady && routeCourses && !finalCourse && <section className="live-section"><div className="section-heading"><h2>{snapshot.room.voteRound === 2 ? '공동 1위 결선투표' : '우리 경로에 맞는 코스 3가지'}</h2><p>{snapshot.room.voteRound === 2 ? '동률인 코스 중 하나를 다시 골라 주세요.' : `${snapshot.room.origin}에서 ${snapshot.room.destination}까지 가까운 실제 장소를 우선했어요.`}</p></div><div className="live-course-list">{availableCourses.map((course) => <div key={course.id}><CourseCard course={course} expanded={expandedCourseId === course.id} onToggle={() => setExpandedCourseId((current) => current === course.id ? '' : course.id)} />{!snapshot.hasVoted && <button className={`live-vote-choice ${selectedCourseId === course.id ? 'selected' : ''}`} onClick={() => setSelectedCourseId(course.id)}>{selectedCourseId === course.id && <Check size={15} />} 이 코스에 투표</button>}</div>)}</div>{snapshot.hasVoted && !snapshot.allVoted && <div className="lock-note"><Vote size={18} /><div><b>내 투표를 저장했어요</b><span>모두 투표할 때까지 선택은 공개되지 않습니다.</span></div></div>}{!snapshot.hasVoted && <button className="primary-button sticky-action" disabled={!selectedCourseId || working} onClick={vote}>익명 투표 보내기 <Vote size={18} /></button>}{snapshot.allVoted && <><div className="result-list">{availableCourses.map((course) => <div key={course.id}><span>{course.emoji}</span><div><b>{course.title}</b><div className="vote-bar"><i style={{ width: `${((voteCounts[course.id] ?? 0) / snapshot.members.length) * 100}%` }} /></div></div><strong>{voteCounts[course.id] ?? 0}표</strong></div>)}</div><button className="primary-button sticky-action" disabled={working} onClick={resolve}>{snapshot.room.voteRound === 1 ? '결과 확인하기' : '최종 코스 확정하기'} <ArrowRight size={18} /></button></>}</section>}
+        {allReady && routeCourses && !finalCourse && <section className="live-section"><div className="section-heading"><h2>{snapshot.room.voteRound === 2 ? '공동 1위 결선투표' : '우리 경로에 맞는 코스 3가지'}</h2><p>{snapshot.room.voteRound === 2 ? '동률인 코스 중 하나를 다시 골라 주세요.' : recommendationSummary}</p></div><div className="live-course-list">{availableCourses.map((course) => <div key={course.id}><CourseCard course={course} expanded={expandedCourseId === course.id} onToggle={() => setExpandedCourseId((current) => current === course.id ? '' : course.id)} />{!snapshot.hasVoted && <button className={`live-vote-choice ${selectedCourseId === course.id ? 'selected' : ''}`} onClick={() => setSelectedCourseId(course.id)}>{selectedCourseId === course.id && <Check size={15} />} 이 코스에 투표</button>}</div>)}</div>{snapshot.hasVoted && !snapshot.allVoted && <div className="lock-note"><Vote size={18} /><div><b>내 투표를 저장했어요</b><span>모두 투표할 때까지 선택은 공개되지 않습니다.</span></div></div>}{!snapshot.hasVoted && <button className="primary-button sticky-action" disabled={!selectedCourseId || working} onClick={vote}>익명 투표 보내기 <Vote size={18} /></button>}{snapshot.allVoted && <><div className="result-list">{availableCourses.map((course) => <div key={course.id}><span>{course.emoji}</span><div><b>{course.title}</b><div className="vote-bar"><i style={{ width: `${((voteCounts[course.id] ?? 0) / snapshot.members.length) * 100}%` }} /></div></div><strong>{voteCounts[course.id] ?? 0}표</strong></div>)}</div><button className="primary-button sticky-action" disabled={working} onClick={resolve}>{snapshot.room.voteRound === 1 ? '결과 확인하기' : '최종 코스 확정하기'} <ArrowRight size={18} /></button></>}</section>}
 
         {finalCourse && !showFinalRoute && <section className="live-section"><button className="confirmed-route-card" onClick={() => setShowFinalRoute(true)}><span className="result-icon"><Check /></span><span><small>취향 분석과 투표가 끝났어요</small><b>확정된 경로 보기</b><em>{finalCourse.title} · 취향 일치 {finalCourse.match}%</em></span><ArrowRight size={20} /></button></section>}
         {finalCourse && showFinalRoute && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 당일치기 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.startDate} · {snapshot.members.length}명 · 취향 일치 {finalCourse.match}%</p></div><div className="final-route-heading"><Map size={16} /><b>최종 경로</b></div><RouteMap stops={(itinerary ?? finalCourse.days)[finalDay]} />{(itinerary ?? finalCourse.days).length > 1 ? <div className="day-switch">{(itinerary ?? finalCourse.days).map((_, index) => <button key={index} className={finalDay === index ? 'active' : ''} onClick={() => { setFinalDay(index); setEditingStop(null) }}>DAY {index + 1}</button>)}</div> : <div className="single-day-label"><CalendarDays size={15} /> 당일 일정</div>}{requester?.host && <div className="route-edit-notice"><Sparkles size={15} /><span>화살표로 순서를 바꾸거나 `장소 변경`으로 실제 장소를 검색할 수 있어요.{itinerarySaving ? ' 저장 중…' : ''}</span></div>}<Timeline stops={(itinerary ?? finalCourse.days)[finalDay]} onMove={requester?.host ? (index, direction) => moveStop(finalDay, index, direction) : undefined} onEdit={requester?.host ? (index) => setEditingStop({ day: finalDay, index }) : undefined} disabled={itinerarySaving} renderAfter={(index) => editingStop?.day === finalDay && editingStop.index === index ? <RoutePlaceEditor current={(itinerary ?? finalCourse.days)[finalDay][index]} onCancel={() => setEditingStop(null)} onSelect={replaceStop} /> : null} /></section>}
@@ -357,6 +369,7 @@ function HomeScreen() {
           <button className={interest === 'not-yet' ? 'selected' : ''} onClick={() => answer('not-yet')}><CircleDollarSign size={18} /> 아직은 잘 모르겠어요</button>
         </div>
         {interest && <div className="survey-thanks" role="status"><Check size={16} /><span>답변해주셔서 고마워요. 개인정보는 전송되지 않았습니다.</span></div>}
+        {interest === 'yes' && <a className="survey-demo-link" href="/demo" onClick={() => track('landing_demo_click')}>개인정보 없이 부산 여행 만들어보기 <ArrowRight size={18} /></a>}
       </section>
 
       <footer className="simple-footer"><div><span className="brand-mark">ㅁ</span><b>모두의 여행</b></div><p>친구들의 취향을 모아 완성하는 여행 계획 서비스</p><small>© 2026 모두의 여행 팀</small></footer>
@@ -393,13 +406,13 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
         <p>{openRoute ? '출발·도착을 정하지 않아도 대중교통 이동이 짧은 권역별 코스를 추천해요.' : '출발 장소와 도착 장소를 직접 입력해 주세요.'}</p>
       </div>
       <div className="form-card">
-        <label>여행방 이름<input value={state.trip.name} onChange={(e) => setTrip('name', e.target.value)} /></label>
         <label>코스 추천 방식
           <div className="route-mode-options">
             <button type="button" className={!openRoute ? 'active' : ''} onClick={() => setTrip('routeMode', 'fixed')}><MapPin size={18} /><span><b>출발·도착 직접 설정</b><small>정한 장소 사이에서 추천</small></span></button>
             <button type="button" className={openRoute ? 'active' : ''} onClick={() => { setTrip('routeMode', 'open'); setTrip('transport', '대중교통') }}><TrainFront size={18} /><span><b>부산 코스부터 추천</b><small>출발·도착 없이 가까운 동선</small></span></button>
           </div>
         </label>
+        <label>여행방 이름<input value={state.trip.name} onChange={(e) => setTrip('name', e.target.value)} /></label>
         {!openRoute ? <>
           <div className="route-input-heading"><b>여행 경로</b><button type="button" onClick={() => { setTrip('origin', ''); setTrip('destination', ''); setOriginSelected(false); setDestinationSelected(false) }}>입력 지우기</button></div>
           <div className="field-row route-fields">
@@ -408,16 +421,16 @@ function CreateTrip({ state, setState }: { state: AppState; setState: React.Disp
             <LocationSearchField label="도착 장소" placeholder="식당·숙소·역 이름 검색" value={state.trip.destination} onChange={(value) => setTrip('destination', value)} selected={destinationSelected} onSelectedChange={setDestinationSelected} />
           </div>
           <small className="route-data-note">검색 결과에서 실제 장소를 선택해 주세요. 현재 부산 지역 장소를 지원합니다.</small>
-        </> : <label>선호 권역 <small>선택하지 않아도 돼요</small>
+        </> : <label>선호 권역 <small>모르면 상관없음을 선택하세요</small>
           <div className="area-chips">{openAreas.map((area) => <button type="button" key={area} className={state.trip.preferredArea === area ? 'active' : ''} onClick={() => setTrip('preferredArea', area)}>{area}</button>)}</div>
           <span className="open-route-note"><TrainFront size={15} /> 같은 권역 안에서 대중교통 누적 이동 45~60분 이내를 우선해요.</span>
         </label>}
         <label>여행 날짜<input type="date" value={state.trip.startDate} onChange={(e) => { setTrip('startDate', e.target.value); setTrip('endDate', e.target.value) }} /></label>
-        <label>이동수단
+        {!openRoute ? <label>이동수단
           <div className="segmented">
-            {(openRoute ? ['대중교통'] : ['대중교통', '자동차']).map((item) => <button className={state.trip.transport === item ? 'active' : ''} onClick={() => setTrip('transport', item)} key={item}>{item === '대중교통' ? <TrainFront size={17} /> : <Compass size={17} />}{item}</button>)}
+            {['대중교통', '자동차'].map((item) => <button type="button" className={state.trip.transport === item ? 'active' : ''} onClick={() => setTrip('transport', item)} key={item}>{item === '대중교통' ? <TrainFront size={17} /> : <Compass size={17} />}{item}</button>)}
           </div>
-        </label>
+        </label> : <div className="transport-summary"><TrainFront size={17} /><span><b>대중교통 기준</b><small>도보와 환승 대기시간을 포함해 가까운 동선을 구성해요.</small></span></div>}
         <label>내 별명<input maxLength={20} value={hostName} onChange={(e) => setHostName(e.target.value)} /></label>
         <label>함께 갈 인원
           <div className="segmented member-count">
@@ -558,7 +571,7 @@ function Preferences({ state, setState }: { state: AppState; setState: React.Dis
       <Progress current={2} total={4} label={`${member.name}님의 취향`} />
       <div className="profile-heading"><Avatar member={member} /><div><h2>{member.name}님은 어떤 여행이 좋아요?</h2><p>마음에 드는 항목을 여러 개 골라주세요.</p></div></div>
       <PreferenceGroup title="가장 가고 싶은 장소" options={themes} selected={form.themes} onSelect={toggle} icons />
-      <PlaceCountControl value={form.placeCount} onChange={(placeCount) => setForm((current) => ({ ...current, placeCount }))} />
+      <PlaceCountControl openRoute={state.trip.routeMode === 'open'} value={form.placeCount} onChange={(placeCount) => setForm((current) => ({ ...current, placeCount }))} />
       <PreferenceGroup title="좋아하는 음식 · 복수 선택" options={foods} selected={form.food} onSelect={(value) => setForm((f) => ({ ...f, food: toggleSelection(f.food, value) }))} />
       <PreferenceGroup title="원하는 분위기 · 복수 선택" options={moods} selected={form.mood} onSelect={(value) => setForm((f) => ({ ...f, mood: toggleSelection(f.mood, value) }))} />
       <button className="primary-button sticky-action" disabled={form.themes.length === 0} onClick={save}>취향 저장하기 <Check size={18} /></button>
@@ -571,9 +584,9 @@ function PreferenceGroup({ title, options, selected, onSelect, icons }: { title:
   return <div className="preference-group"><h3>{title}</h3><div className={icons ? 'choice-grid' : 'choice-chips'}>{options.map((option) => <button key={option} className={selected.includes(option) ? 'selected' : ''} onClick={() => onSelect(option)}>{icons && iconMap[option]}{option}</button>)}</div></div>
 }
 
-function PlaceCountControl({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+function PlaceCountControl({ value, onChange, openRoute = false }: { value: number; onChange: (value: number) => void; openRoute?: boolean }) {
   const ranges = [{ label: '1~2곳', value: 2, caption: '가볍게' }, { label: '3~4곳', value: 4, caption: '적당히' }, { label: '5~6곳', value: 6, caption: '알차게' }]
-  return <div className="preference-group"><h3>방문 장소 수</h3><div className="place-count-ranges">{ranges.map((range) => <button type="button" key={range.value} className={value === range.value ? 'selected' : ''} onClick={() => onChange(range.value)}><b>{range.label}</b><span>{range.caption}</span></button>)}</div><small className="place-count-note">출발·도착 장소는 개수에서 제외해요.</small></div>
+  return <div className="preference-group"><h3>방문 장소 수</h3><div className="place-count-ranges">{ranges.map((range) => <button type="button" key={range.value} className={value === range.value ? 'selected' : ''} onClick={() => onChange(range.value)}><b>{range.label}</b><span>{range.caption}</span></button>)}</div><small className="place-count-note">{openRoute ? '추천 코스에 포함할 방문 장소 수예요.' : '출발·도착 장소는 개수에서 제외해요.'}</small></div>
 }
 
 function Analysis({ state, onNext }: { state: AppState; onNext: () => void }) {

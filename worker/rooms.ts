@@ -110,7 +110,7 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
     return json({ roomId, memberId, token, expiresAt }, 201);
   }
 
-  const match = url.pathname.match(/^\/api\/rooms\/([a-z0-9]+)(?:\/(members|preferences|recommendations|itinerary|votes|resolve))?$/);
+  const match = url.pathname.match(/^\/api\/rooms\/([a-z0-9]+)(?:\/(members|preferences|recommendations|itinerary|votes|resolve|capacity))?$/);
   if (!match) return null;
   const [, roomId, action] = match;
   const found = await activeRoom(db, roomId);
@@ -141,6 +141,16 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
     if (!member.is_host) return json({ error: '여행방은 방장만 삭제할 수 있습니다.' }, 403);
     await db.prepare('DELETE FROM rooms WHERE id = ?1').bind(roomId).run();
     return json({ ok: true });
+  }
+
+  if (action === 'capacity' && request.method === 'PUT') {
+    if (!member.is_host) return json({ error: '참여 인원은 방장만 변경할 수 있습니다.' }, 403);
+    if (room.recommendation_json || room.final_course_id) return json({ error: '추천이 시작된 뒤에는 참여 인원을 변경할 수 없습니다.' }, 409);
+    const count = await db.prepare('SELECT COUNT(*) AS count FROM members WHERE room_id = ?1').bind(roomId).first<{ count: number }>();
+    const expectedMembers = count?.count ?? 0;
+    if (expectedMembers < 1) return json({ error: '참여자가 없어 여행을 시작할 수 없습니다.' }, 409);
+    await db.prepare('UPDATE rooms SET expected_members = ?1 WHERE id = ?2').bind(expectedMembers, roomId).run();
+    return json({ ok: true, expectedMembers });
   }
 
   if (action === 'recommendations' && request.method === 'GET') {

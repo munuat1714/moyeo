@@ -74,6 +74,12 @@ export function saveLivePreference(roomId: string, preference: Preference) {
   }, roomId)
 }
 
+export function startLiveRoomWithCurrentMembers(roomId: string) {
+  return request<{ ok: true; expectedMembers: number }>(`/api/rooms/${roomId}/capacity`, {
+    method: 'PUT', body: '{}',
+  }, roomId)
+}
+
 export function fetchLiveRecommendations(roomId: string) {
   return request<{ courses?: Course[]; status?: 'pending'; retryAfterMs?: number }>(`/api/rooms/${roomId}/recommendations`, {}, roomId)
 }
