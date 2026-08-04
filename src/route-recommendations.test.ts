@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { distanceKm, resolveVisitCount, selectPlaces } from '../worker/recommendations'
+import { distanceKm, recommendationSearchRequestCount, resolveVisitCount, selectPlaces } from '../worker/recommendations'
 import { foods, themes } from './data'
 
 describe('경로 기반 추천 거리 계산', () => {
@@ -40,5 +40,11 @@ describe('경로 기반 추천 거리 계산', () => {
 
   it('실제 음식점 검색에 사용할 음식 분류를 제공한다', () => {
     expect(foods).toEqual(expect.arrayContaining(['한식', '고기·구이', '해산물', '일식', '중식', '양식', '분식', '디저트·베이커리', '채식']))
+  })
+
+  it('추천 한 번의 네이버 검색 요청을 최대 10회로 제한한다', () => {
+    expect(recommendationSearchRequestCount(false)).toBe(10)
+    expect(recommendationSearchRequestCount(true)).toBe(6)
+    expect(recommendationSearchRequestCount(false) * 1000).toBe(10_000)
   })
 })

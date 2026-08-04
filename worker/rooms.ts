@@ -9,6 +9,7 @@ type RoomRow = {
   id: string; name: string; origin: string; destination: string; start_date: string; end_date: string;
   transport: string; stay: string; expected_members: number; vote_round: number; runoff_course_ids: string;
   final_course_id: string | null; recommendation_json: string | null; itinerary_json: string | null; created_at: number; expires_at: number;
+  recommendation_status: string | null; recommendation_started_at: number | null; recommendation_retry_at: number | null;
 };
 
 type MemberRow = {
@@ -144,15 +145,31 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
     if (members.results.length !== room.expected_members || members.results.some((item) => !item.preference_json)) {
       return json({ error: '모든 참여자가 취향을 입력한 뒤 추천을 만들 수 있습니다.' }, 409);
     }
+    const now = Math.floor(Date.now() / 1000);
+    const staleBefore = now - 90;
+    const claim = await db.prepare(`UPDATE rooms
+      SET recommendation_status = 'generating', recommendation_started_at = ?1
+      WHERE id = ?2 AND recommendation_json IS NULL AND (
+        recommendation_status IS NULL OR
+        (recommendation_status = 'generating' AND recommendation_started_at < ?3) OR
+        (recommendation_status = 'failed' AND COALESCE(recommendation_retry_at, 0) <= ?1)
+      )`).bind(now, roomId, staleBefore).run();
+    if ((claim.meta.changes ?? 0) === 0) {
+      const pending = await db.prepare('SELECT recommendation_json, recommendation_status, recommendation_retry_at FROM rooms WHERE id = ?1').bind(roomId).first<RoomRow>();
+      if (pending?.recommendation_json) return json({ courses: JSON.parse(pending.recommendation_json) });
+      const retryAfterMs = Math.max(1500, ((pending?.recommendation_retry_at ?? now + 2) - now) * 1000);
+      return json({ status: 'pending', retryAfterMs: Math.min(retryAfterMs, 10_000) }, 202);
+    }
     try {
       const preferences = members.results.flatMap((item) => item.preference_json ? [JSON.parse(item.preference_json)] : []);
       const courses = await generateRouteCourses(room.origin, room.destination, searchCredentials, preferences);
       const encoded = JSON.stringify(courses);
-      await db.prepare('UPDATE rooms SET recommendation_json = ?1 WHERE id = ?2 AND recommendation_json IS NULL').bind(encoded, roomId).run();
+      await db.prepare("UPDATE rooms SET recommendation_json = ?1, recommendation_status = 'ready', recommendation_retry_at = NULL WHERE id = ?2 AND recommendation_json IS NULL").bind(encoded, roomId).run();
       const saved = await db.prepare('SELECT recommendation_json FROM rooms WHERE id = ?1').bind(roomId).first<{ recommendation_json: string }>();
       return json({ courses: JSON.parse(saved?.recommendation_json ?? encoded) });
     } catch (reason) {
       console.error('route-recommendation-failed', reason);
+      await db.prepare("UPDATE rooms SET recommendation_status = 'failed', recommendation_retry_at = ?1 WHERE id = ?2 AND recommendation_json IS NULL").bind(now + 60, roomId).run();
       return json({ error: reason instanceof Error ? reason.message : '경로 주변 추천을 만들지 못했습니다.' }, 502);
     }
   }

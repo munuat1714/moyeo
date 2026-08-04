@@ -13,6 +13,9 @@ type SearchPlace = {
 
 type RoutePreference = { themes?: string[]; placeCount?: number; pace?: string; food?: string | string[]; mood?: string | string[] }
 
+export const MAX_ROUTE_KEYWORDS = 4
+export const recommendationSearchRequestCount = (sameZone: boolean) => 2 + (sameZone ? 1 : 2) * MAX_ROUTE_KEYWORDS
+
 const profiles = [
   { id: 'balance', title: '가까운 곳부터 알차게', label: '동선 균형', emoji: '✨', tags: ['맛집', '감성 카페', '사진'] },
   { id: 'slow', title: '천천히 머무는 동네 여행', label: '여유 중심', emoji: '🌿', tags: ['감성 카페', '산책', '사진'] },
@@ -52,23 +55,55 @@ const strip = (value: unknown) => String(value ?? '')
   .replace(/<[^>]*>/g, '')
   .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
 
+const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+
 async function search(query: string, keyword: string, credentials: SearchCredentials, display = 5) {
-  const endpoint = new URL('https://openapi.naver.com/v1/search/local.json')
-  endpoint.searchParams.set('query', query)
-  endpoint.searchParams.set('display', String(display))
-  endpoint.searchParams.set('sort', 'comment')
-  const response = await fetch(endpoint, { headers: {
-    'X-Naver-Client-Id': credentials.clientId ?? '',
-    'X-Naver-Client-Secret': credentials.clientSecret ?? '',
-  } })
-  if (!response.ok) throw new Error(`Naver search failed: ${response.status}`)
-  const data = await response.json() as { items?: Array<Record<string, unknown>> }
+  let data: { items?: Array<Record<string, unknown>> } | null = null
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const endpoint = new URL('https://openapi.naver.com/v1/search/local.json')
+    endpoint.searchParams.set('query', query)
+    endpoint.searchParams.set('display', String(display))
+    endpoint.searchParams.set('sort', 'comment')
+    const response = await fetch(endpoint, { headers: {
+      'X-Naver-Client-Id': credentials.clientId ?? '',
+      'X-Naver-Client-Secret': credentials.clientSecret ?? '',
+    } })
+    if (response.ok) {
+      data = await response.json() as { items?: Array<Record<string, unknown>> }
+      break
+    }
+    const detail = await response.text().catch(() => '')
+    if (response.status !== 429 || attempt === 2) {
+      console.error('naver-local-search-error', { status: response.status, query, detail: detail.slice(0, 300) })
+      throw new Error(response.status === 429
+        ? '네이버 검색 요청이 많아 잠시 쉬고 있어요. 1분 후 다시 시도해 주세요.'
+        : `네이버 장소 검색을 완료하지 못했습니다. (${response.status})`)
+    }
+    const retryAfter = Number(response.headers.get('Retry-After'))
+    const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 800 * 2 ** attempt
+    await sleep(delay + Math.floor(Math.random() * 300))
+  }
+  if (!data) throw new Error('네이버 장소 검색 결과를 불러오지 못했습니다.')
   return (data.items ?? []).flatMap((item): SearchPlace[] => {
     const longitude = Number(item.mapx) / 10_000_000
     const latitude = Number(item.mapy) / 10_000_000
     if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return []
     return [{ title: strip(item.title), category: strip(item.category), roadAddress: strip(item.roadAddress || item.address), longitude, latitude, keyword }]
   })
+}
+
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, task: (item: T) => Promise<R>) {
+  const results = new Array<R>(items.length)
+  let nextIndex = 0
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++
+      results[index] = await task(items[index])
+      if (nextIndex < items.length) await sleep(120 + Math.floor(Math.random() * 100))
+    }
+  })
+  await Promise.all(workers)
+  return results
 }
 
 export function distanceKm(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
@@ -165,9 +200,11 @@ export async function generateRouteCourses(originName: string, destinationName: 
   const foodKeywords = topFoods.map((food) => foodKeyword[food]).filter(Boolean)
   const teamKeywords = [...new Set([tasteKeywords[0], foodKeywords[0], ...tasteKeywords.slice(1), ...foodKeywords.slice(1)].filter(Boolean))]
   const visitCount = resolveVisitCount(preferences)
-  const keywords = [...new Set([...teamKeywords, '맛집', '카페', '관광명소', '체험', '전시', '쇼핑'])]
+  const keywords = [...new Set([...teamKeywords.slice(0, 2), '관광명소', '맛집', '카페'])].slice(0, MAX_ROUTE_KEYWORDS)
   const zones = originName.trim() === destinationName.trim() ? [originName] : [originName, destinationName]
-  const batches = await Promise.all(zones.flatMap((zone) => keywords.map((keyword) => search(`부산 ${zone}${nearbyTrip ? ' 주변' : ''} ${keyword}`, keyword, credentials))))
+  await sleep(Math.floor(Math.random() * 500))
+  const searchJobs = zones.flatMap((zone) => keywords.map((keyword) => ({ zone, keyword })))
+  const batches = await mapWithConcurrency(searchJobs, 2, ({ zone, keyword }) => search(`부산 ${zone}${nearbyTrip ? ' 주변' : ''} ${keyword}`, keyword, credentials))
   const pool = batches.flat().filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
   if (pool.length < 6) throw new Error('경로 주변 추천 장소가 부족합니다.')
 

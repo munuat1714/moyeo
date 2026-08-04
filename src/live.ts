@@ -75,7 +75,7 @@ export function saveLivePreference(roomId: string, preference: Preference) {
 }
 
 export function fetchLiveRecommendations(roomId: string) {
-  return request<{ courses: Course[] }>(`/api/rooms/${roomId}/recommendations`, {}, roomId)
+  return request<{ courses?: Course[]; status?: 'pending'; retryAfterMs?: number }>(`/api/rooms/${roomId}/recommendations`, {}, roomId)
 }
 
 export function fetchLiveItinerary(roomId: string) {

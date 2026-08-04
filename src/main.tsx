@@ -166,8 +166,15 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
   const loadRecommendations = async () => {
     setRecommendationLoading(true); setRecommendationError('')
     try {
-      const result = await fetchLiveRecommendations(roomId)
-      setRouteCourses(result.courses)
+      for (let attempt = 0; attempt < 24; attempt += 1) {
+        const result = await fetchLiveRecommendations(roomId)
+        if (result.courses) {
+          setRouteCourses(result.courses)
+          return
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, Math.min(5000, result.retryAfterMs ?? 1500)))
+      }
+      throw new Error('추천 요청이 많아 처리 순서를 기다리고 있어요. 잠시 후 다시 시도해 주세요.')
     } catch (reason) {
       setRecommendationError(reason instanceof Error ? reason.message : '경로 주변 추천을 만들지 못했습니다.')
     } finally { setRecommendationLoading(false) }
