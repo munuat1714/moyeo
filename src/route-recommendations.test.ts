@@ -27,6 +27,23 @@ describe('경로 기반 추천 거리 계산', () => {
     expect(selectPlaces(pool, origin, destination, 'balance', ['카페'], 2).map((place) => place.title)).toEqual(['전포 카페거리', '부산시민공원'])
   })
 
+  it('앞 코스에서 사용한 장소를 다음 코스에서는 가능한 한 피한다', () => {
+    const origin = { title: '출발', category: '역', roadAddress: '', latitude: 35.15, longitude: 129.06, keyword: '출발지' }
+    const destination = { title: '도착', category: '역', roadAddress: '', latitude: 35.16, longitude: 129.07, keyword: '도착지' }
+    const pool = [
+      { title: '맛집 A', category: '식당', roadAddress: '', latitude: 35.151, longitude: 129.061, keyword: '맛집' },
+      { title: '맛집 B', category: '식당', roadAddress: '', latitude: 35.152, longitude: 129.062, keyword: '맛집' },
+      { title: '카페 A', category: '카페', roadAddress: '', latitude: 35.153, longitude: 129.063, keyword: '카페' },
+      { title: '카페 B', category: '카페', roadAddress: '', latitude: 35.154, longitude: 129.064, keyword: '카페' },
+      { title: '명소 A', category: '명소', roadAddress: '', latitude: 35.155, longitude: 129.065, keyword: '관광명소' },
+      { title: '체험 A', category: '체험', roadAddress: '', latitude: 35.156, longitude: 129.066, keyword: '체험' },
+    ]
+    const first = selectPlaces(pool, origin, destination, 'balance', ['맛집'], 2)
+    const second = selectPlaces(pool, origin, destination, 'slow', ['맛집'], 2, new Set(first.map((place) => place.title)))
+    expect(second.map((place) => place.title)).not.toEqual(first.map((place) => place.title))
+    expect(second.every((place) => !first.some((used) => used.title === place.title))).toBe(true)
+  })
+
   it('팀원들이 고른 방문 장소 수의 평균을 1~6곳으로 계산한다', () => {
     expect(resolveVisitCount([{ placeCount: 3 }, { placeCount: 5 }])).toBe(4)
     expect(resolveVisitCount([{ placeCount: 10 }])).toBe(6)

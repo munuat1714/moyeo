@@ -150,11 +150,11 @@ function nearestOrder(items: SearchPlace[], start: SearchPlace) {
   return ordered
 }
 
-export function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destination: SearchPlace, profileId: string, teamKeywords: string[], count: number) {
+export function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destination: SearchPlace, profileId: string, teamKeywords: string[], count: number, avoidTitles = new Set<string>()) {
   const variant = profileId === 'slow' ? ['카페', '전시', '관광명소', '맛집', '쇼핑', '체험']
     : profileId === 'active' ? ['체험', '쇼핑', '관광명소', '맛집', '전시', '카페']
       : ['맛집', '카페', '관광명소', '쇼핑', '전시', '체험']
-  const preferred = [...new Set([...teamKeywords, ...variant])]
+  const preferred = [...new Set([...variant.slice(0, 3), ...teamKeywords, ...variant.slice(3)])]
   const direct = distanceKm(origin, destination)
   const nearbyTrip = direct <= 3
   const center = { latitude: (origin.latitude + destination.latitude) / 2, longitude: (origin.longitude + destination.longitude) / 2 }
@@ -169,9 +169,12 @@ export function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destinati
   const selected: SearchPlace[] = []
   preferred.forEach((keyword) => {
     if (selected.length >= count) return
-    const next = unique.filter((place) => place.keyword === keyword && !selected.includes(place)).sort((a, b) => distanceFromRouteArea(a) - distanceFromRouteArea(b))[0]
+    const next = unique.filter((place) => place.keyword === keyword && !selected.includes(place) && !avoidTitles.has(place.title)).sort((a, b) => distanceFromRouteArea(a) - distanceFromRouteArea(b))[0]
     if (next) selected.push(next)
   })
+  if (selected.length < count) {
+    unique.filter((place) => !selected.includes(place) && !avoidTitles.has(place.title)).sort((a, b) => distanceFromRouteArea(a) - distanceFromRouteArea(b)).slice(0, count - selected.length).forEach((place) => selected.push(place))
+  }
   if (selected.length < count) {
     unique.filter((place) => !selected.includes(place)).sort((a, b) => distanceFromRouteArea(a) - distanceFromRouteArea(b)).slice(0, count - selected.length).forEach((place) => selected.push(place))
   }
@@ -200,7 +203,7 @@ export async function generateRouteCourses(originName: string, destinationName: 
   const foodKeywords = topFoods.map((food) => foodKeyword[food]).filter(Boolean)
   const teamKeywords = [...new Set([tasteKeywords[0], foodKeywords[0], ...tasteKeywords.slice(1), ...foodKeywords.slice(1)].filter(Boolean))]
   const visitCount = resolveVisitCount(preferences)
-  const keywords = [...new Set([...teamKeywords.slice(0, 2), '관광명소', '맛집', '카페'])].slice(0, MAX_ROUTE_KEYWORDS)
+  const keywords = [...new Set([teamKeywords[0] ?? '맛집', '카페', '관광명소', '체험'])].slice(0, MAX_ROUTE_KEYWORDS)
   const zones = originName.trim() === destinationName.trim() ? [originName] : [originName, destinationName]
   await sleep(Math.floor(Math.random() * 500))
   const searchJobs = zones.flatMap((zone) => keywords.map((keyword) => ({ zone, keyword })))
@@ -208,8 +211,10 @@ export async function generateRouteCourses(originName: string, destinationName: 
   const pool = batches.flat().filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
   if (pool.length < 6) throw new Error('경로 주변 추천 장소가 부족합니다.')
 
+  const usedAcrossCourses = new Set<string>()
   return profiles.map((profile) => {
-    const selected = selectPlaces(pool, origin, destination, profile.id, teamKeywords, visitCount)
+    const selected = selectPlaces(pool, origin, destination, profile.id, teamKeywords, visitCount, usedAcrossCourses)
+    selected.forEach((place) => usedAcrossCourses.add(place.title))
     const ordered = nearestOrder(selected, origin)
     const routePoints = [origin, ...ordered, destination]
     const routeKm = routePoints.slice(1).reduce((sum, point, index) => sum + distanceKm(routePoints[index], point), 0)
