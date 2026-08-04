@@ -1,5 +1,5 @@
 import type { Course, Stop } from '../src/types'
-import { nearbyPublicPlaces } from './public-data'
+import { nearbyPublicPlaces, weatherRiskForDate } from './public-data'
 
 export type SearchCredentials = { clientId?: string; clientSecret?: string }
 export type SearchCache = D1Database
@@ -13,6 +13,7 @@ type SearchPlace = {
   keyword: string
   source?: Stop['source']
   verifiedAt?: string
+  detail?: string
 }
 
 type RoutePreference = { themes?: string[]; placeCount?: number; pace?: string; food?: string | string[]; mood?: string | string[] }
@@ -98,6 +99,8 @@ const mapPublicPlaces = (rows: any[]): SearchPlace[] => rows.map((row) => ({
     : row.provider === 'BUSAN_MODEL_FOOD' ? '부산광역시 모범음식점'
     : row.provider === 'KHS_HERITAGE' ? '국가유산청 공식 데이터' : '한국관광공사 TourAPI',
   verifiedAt: String(row.source_modified_at || new Date().toISOString().slice(0, 10)).slice(0, 10),
+  detail: [row.event_title ? `오늘의 전시: ${row.event_title}` : '', row.opening_hours || row.event_hours, row.overview]
+    .filter(Boolean).join(' · ').slice(0, 220),
 }))
 
 const normalizeSearchQuery = (query: string) => query.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ko-KR')
@@ -196,13 +199,14 @@ export function resolveVisitCount(preferences: RoutePreference[]) {
 
 function routeStop(title: string, time: string, point: SearchPlace, shared = false): Stop {
   const meta = keywordMeta[point.keyword] ?? { category: '관광', duration: '1시간', price: 0 }
-  return {
+  const stop: Stop = {
     time, title, category: meta.category, duration: meta.duration, price: meta.price, shared,
-    description: `${point.category || meta.category} · ${point.roadAddress || '상세 위치는 네이버지도에서 확인해 주세요.'}`,
+    description: [point.category || meta.category, point.roadAddress || '상세 위치는 네이버지도에서 확인해 주세요.', point.detail].filter(Boolean).join(' · '),
     latitude: point.latitude, longitude: point.longitude, source: point.source ?? '네이버 지역검색',
     verifiedAt: point.verifiedAt ?? new Date().toISOString().slice(0, 10),
     placeUrl: `https://map.naver.com/p/search/${encodeURIComponent(title)}`,
   }
+  return stop
 }
 
 function endpointStop(title: string, time: string, point: SearchPlace, start: boolean): Stop {
@@ -226,7 +230,7 @@ function nearestOrder(items: SearchPlace[], start: SearchPlace) {
   return ordered
 }
 
-export function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destination: SearchPlace, profileId: string, teamKeywords: string[], count: number, avoidTitles = new Set<string>()) {
+export function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destination: SearchPlace, profileId: string, teamKeywords: string[], count: number, avoidTitles = new Set<string>(), badWeather = false) {
   const variant = profileId === 'slow' ? ['카페', '전시', '관광명소', '맛집', '쇼핑', '체험']
     : profileId === 'active' ? ['체험', '쇼핑', '관광명소', '맛집', '전시', '카페']
       : ['맛집', '카페', '관광명소', '쇼핑', '전시', '체험']
@@ -237,6 +241,8 @@ export function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destinati
   const distanceFromRouteArea = (place: SearchPlace) => nearbyTrip
     ? distanceKm(center, place)
     : Math.min(distanceKm(origin, place), distanceKm(destination, place))
+  const rankDistance = (place: SearchPlace) => distanceFromRouteArea(place)
+    + (badWeather && !['맛집', '쇼핑', '역사·문화', '공연·축제', '전시·예술'].includes(place.category) ? 4 : 0)
   const maxRouteAreaDistance = nearbyTrip ? 6 : Math.max(5, Math.min(10, direct * .65))
   const withoutEndpoints = pool.filter((place) => place.title !== origin.title && place.title !== destination.title && distanceKm(origin, place) > .08 && distanceKm(destination, place) > .08)
   const close = withoutEndpoints.filter((place) => distanceFromRouteArea(place) <= maxRouteAreaDistance)
@@ -245,19 +251,19 @@ export function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destinati
   const selected: SearchPlace[] = []
   preferred.forEach((keyword) => {
     if (selected.length >= count) return
-    const next = unique.filter((place) => place.keyword === keyword && !selected.includes(place) && !avoidTitles.has(place.title)).sort((a, b) => distanceFromRouteArea(a) - distanceFromRouteArea(b))[0]
+    const next = unique.filter((place) => place.keyword === keyword && !selected.includes(place) && !avoidTitles.has(place.title)).sort((a, b) => rankDistance(a) - rankDistance(b))[0]
     if (next) selected.push(next)
   })
   if (selected.length < count) {
-    unique.filter((place) => !selected.includes(place) && !avoidTitles.has(place.title)).sort((a, b) => distanceFromRouteArea(a) - distanceFromRouteArea(b)).slice(0, count - selected.length).forEach((place) => selected.push(place))
+    unique.filter((place) => !selected.includes(place) && !avoidTitles.has(place.title)).sort((a, b) => rankDistance(a) - rankDistance(b)).slice(0, count - selected.length).forEach((place) => selected.push(place))
   }
   if (selected.length < count) {
-    unique.filter((place) => !selected.includes(place)).sort((a, b) => distanceFromRouteArea(a) - distanceFromRouteArea(b)).slice(0, count - selected.length).forEach((place) => selected.push(place))
+    unique.filter((place) => !selected.includes(place)).sort((a, b) => rankDistance(a) - rankDistance(b)).slice(0, count - selected.length).forEach((place) => selected.push(place))
   }
   return selected
 }
 
-async function generateOpenRouteCourses(preferredArea: string, credentials: SearchCredentials, preferences: RoutePreference[], db?: SearchCache) {
+async function generateOpenRouteCourses(preferredArea: string, credentials: SearchCredentials, preferences: RoutePreference[], db?: SearchCache, travelDate?: string) {
   const themeCounts: Record<string, number> = {}
   preferences.flatMap((preference) => preference.themes ?? []).forEach((theme) => { themeCounts[theme] = (themeCounts[theme] ?? 0) + 1 })
   const topThemes = Object.entries(themeCounts).sort((a, b) => b[1] - a[1]).map(([theme]) => theme)
@@ -268,7 +274,7 @@ async function generateOpenRouteCourses(preferredArea: string, credentials: Sear
   const publicByZone = new Map<string, SearchPlace[]>()
   if (db) {
     await Promise.all([...new Map(assignments.map(({ zone }) => [zone.label, zone])).values()].map(async (zone) => {
-      const rows = await nearbyPublicPlaces(db, zone, 6, 120)
+      const rows = await nearbyPublicPlaces(db, zone, 6, 120, travelDate)
       publicByZone.set(zone.label, mapPublicPlaces(rows))
     }))
   }
@@ -286,6 +292,7 @@ async function generateOpenRouteCourses(preferredArea: string, credentials: Sear
   const liveByZone = new Map<string, SearchPlace[]>()
   jobs.forEach((job, index) => liveByZone.set(job.zone.label, [...(liveByZone.get(job.zone.label) ?? []), ...batches[index]]))
   const usedAcrossCourses = new Set<string>()
+  const badWeather = db ? await weatherRiskForDate(db, travelDate) : false
 
   return assignments.map(({ profile, zone }) => {
     const center: SearchPlace = { title: `${zone.label} 중심`, category: '권역', roadAddress: '', latitude: zone.latitude, longitude: zone.longitude, keyword: '관광명소' }
@@ -296,7 +303,7 @@ async function generateOpenRouteCourses(preferredArea: string, credentials: Sear
     const expandedFallback = curatedFallbackPlaces.filter((place) => distanceKm(center, place) <= 6)
     const pool = [...liveNearby, ...nearbyFallback, ...(liveNearby.length + nearbyFallback.length < visitCount ? [...liveExpanded, ...expandedFallback] : [])]
       .filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
-    const selected = selectPlaces(pool, center, center, profile.id, teamKeywords, visitCount, usedAcrossCourses)
+    const selected = selectPlaces(pool, center, center, profile.id, teamKeywords, visitCount, usedAcrossCourses, badWeather)
     selected.forEach((place) => usedAcrossCourses.add(place.title))
     const ordered = nearestOrder(selected, center)
     const routeKm = ordered.slice(1).reduce((sum, point, index) => sum + distanceKm(ordered[index], point), 0)
@@ -310,12 +317,12 @@ async function generateOpenRouteCourses(preferredArea: string, credentials: Sear
   })
 }
 
-export async function generateRouteCourses(originName: string, destinationName: string, credentials: SearchCredentials, preferences: RoutePreference[] = [], preferredArea?: string, db?: SearchCache): Promise<Course[]> {
+export async function generateRouteCourses(originName: string, destinationName: string, credentials: SearchCredentials, preferences: RoutePreference[] = [], preferredArea?: string, db?: SearchCache, travelDate?: string): Promise<Course[]> {
   if (!credentials.clientId || !credentials.clientSecret) {
-    if (preferredArea && db) return generateOpenRouteCourses(preferredArea, credentials, preferences, db)
+    if (preferredArea && db) return generateOpenRouteCourses(preferredArea, credentials, preferences, db, travelDate)
     throw new Error('출발·도착 장소의 좌표 확인을 위해 네이버 지역검색 설정이 필요합니다.')
   }
-  if (preferredArea) return generateOpenRouteCourses(preferredArea, credentials, preferences, db)
+  if (preferredArea) return generateOpenRouteCourses(preferredArea, credentials, preferences, db, travelDate)
   const [originResults, destinationResults] = await Promise.all([
     search(`부산 ${originName}`, '출발지', credentials, 1, db),
     search(`부산 ${destinationName}`, '도착지', credentials, 1, db),
@@ -339,7 +346,8 @@ export async function generateRouteCourses(originName: string, destinationName: 
   const keywords = [...new Set([teamKeywords[0] ?? '맛집', '카페', '관광명소', '체험'])].slice(0, MAX_ROUTE_KEYWORDS)
   const zones = originName.trim() === destinationName.trim() ? [originName] : [originName, destinationName]
   const center = { latitude: (origin.latitude + destination.latitude) / 2, longitude: (origin.longitude + destination.longitude) / 2 }
-  const publicPool = db ? mapPublicPlaces(await nearbyPublicPlaces(db, center, nearbyTrip ? 6 : Math.max(6, Math.min(12, distanceKm(origin, destination))), 150)) : []
+  const publicPool = db ? mapPublicPlaces(await nearbyPublicPlaces(db, center, nearbyTrip ? 6 : Math.max(6, Math.min(12, distanceKm(origin, destination))), 150, travelDate)) : []
+  const badWeather = db ? await weatherRiskForDate(db, travelDate) : false
   if (publicPool.length < Math.max(8, visitCount * 2)) await sleep(Math.floor(Math.random() * 500))
   const searchJobs = publicPool.length >= Math.max(8, visitCount * 2) ? [] : zones.flatMap((zone) => keywords.map((keyword) => ({ zone, keyword })))
   const batches = await mapWithConcurrency(searchJobs, 2, async ({ zone, keyword }) => {
@@ -355,7 +363,7 @@ export async function generateRouteCourses(originName: string, destinationName: 
 
   const usedAcrossCourses = new Set<string>()
   return profiles.map((profile) => {
-    const selected = selectPlaces(pool, origin, destination, profile.id, teamKeywords, visitCount, usedAcrossCourses)
+    const selected = selectPlaces(pool, origin, destination, profile.id, teamKeywords, visitCount, usedAcrossCourses, badWeather)
     selected.forEach((place) => usedAcrossCourses.add(place.title))
     const ordered = nearestOrder(selected, origin)
     const routePoints = [origin, ...ordered, destination]

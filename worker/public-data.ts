@@ -1,66 +1,48 @@
-export type PublicDataEnv = {
-  DB: D1Database
-  PUBLIC_DATA_SERVICE_KEY?: string
-}
+export type PublicDataEnv = { DB: D1Database; PUBLIC_DATA_SERVICE_KEY?: string }
 
 export type PublicPlace = {
-  provider: string
-  sourceId: string
-  title: string
-  category: string
-  address: string
-  latitude: number
-  longitude: number
-  telephone: string
-  imageUrl: string
-  sourceUrl: string
-  officialTags: string[]
-  sourceModifiedAt?: string
+  provider: string; sourceId: string; title: string; category: string; address: string
+  latitude: number; longitude: number; telephone: string; imageUrl: string; sourceUrl: string
+  officialTags: string[]; sourceModifiedAt?: string
 }
 
 const TOUR_TYPES: Record<string, string> = {
-  '12': '관광명소',
-  '14': '역사·문화',
-  '15': '공연·축제',
-  '28': '액티비티',
-  '38': '쇼핑',
-  '39': '맛집',
+  '12': '관광명소', '14': '역사·문화', '15': '공연·축제', '28': '액티비티', '38': '쇼핑', '39': '맛집',
 }
 
+const decodedServiceKey = (value: string) => { try { return decodeURIComponent(value) } catch { return value } }
 const itemsFrom = (data: any): Record<string, any>[] => {
   const value = data?.response?.body?.items?.item ?? data?.getFoodKr?.item ?? data?.item ?? []
   return Array.isArray(value) ? value : value ? [value] : []
 }
-
-const decodedServiceKey = (value: string) => {
-  try { return decodeURIComponent(value) } catch { return value }
-}
-
 const pick = (item: Record<string, any>, ...keys: string[]) => {
   for (const key of keys) if (item[key] !== undefined && item[key] !== null && item[key] !== '') return item[key]
   return ''
 }
+const clean = (value: unknown) => String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/\s+/g, ' ').trim()
 
 async function fetchJson(url: URL) {
   const response = await fetch(url, { headers: { Accept: 'application/json' } })
   if (!response.ok) throw new Error(`${url.pathname}: ${response.status}`)
-  return response.json()
+  const data = await response.json<any>()
+  const code = data?.response?.header?.resultCode
+  if (code && code !== '00' && code !== '0000') throw new Error(`${url.pathname}: ${code} ${data.response.header.resultMsg ?? ''}`)
+  return data
+}
+
+const publicUrl = (path: string, serviceKey: string) => {
+  const url = new URL(`https://apis.data.go.kr${path}`)
+  url.searchParams.set('serviceKey', decodedServiceKey(serviceKey))
+  return url
 }
 
 async function tourPlaces(serviceKey: string) {
   const results: PublicPlace[] = []
   for (const [contentTypeId, category] of Object.entries(TOUR_TYPES)) {
-    const url = new URL('https://apis.data.go.kr/B551011/KorService2/areaBasedList2')
-    url.searchParams.set('serviceKey', decodedServiceKey(serviceKey))
-    url.searchParams.set('MobileOS', 'ETC')
-    url.searchParams.set('MobileApp', 'Moyeo')
-    url.searchParams.set('_type', 'json')
-    url.searchParams.set('areaCode', '6')
-    url.searchParams.set('contentTypeId', contentTypeId)
-    url.searchParams.set('numOfRows', '1000')
-    url.searchParams.set('pageNo', '1')
-    const data = await fetchJson(url)
-    for (const item of itemsFrom(data)) {
+    const url = publicUrl('/B551011/KorService2/areaBasedList2', serviceKey)
+    Object.entries({ MobileOS: 'ETC', MobileApp: 'Moyeo', _type: 'json', areaCode: '6', contentTypeId, numOfRows: '1000', pageNo: '1' })
+      .forEach(([key, value]) => url.searchParams.set(key, value))
+    for (const item of itemsFrom(await fetchJson(url))) {
       const latitude = Number(item.mapy), longitude = Number(item.mapx)
       if (!item.contentid || !item.title || !Number.isFinite(latitude) || !Number.isFinite(longitude)) continue
       results.push({
@@ -76,78 +58,31 @@ async function tourPlaces(serviceKey: string) {
 }
 
 async function busanFoodPlaces(serviceKey: string) {
-  const url = new URL('https://apis.data.go.kr/6260000/FoodService/getFoodKr')
-  url.searchParams.set('ServiceKey', decodedServiceKey(serviceKey))
-  url.searchParams.set('resultType', 'json')
-  url.searchParams.set('numOfRows', '1000')
-  url.searchParams.set('pageNo', '1')
-  const data = await fetchJson(url)
-  return itemsFrom(data).flatMap((item): PublicPlace[] => {
+  const url = publicUrl('/6260000/FoodService/getFoodKr', serviceKey)
+  Object.entries({ resultType: 'json', numOfRows: '1000', pageNo: '1' }).forEach(([key, value]) => url.searchParams.set(key, value))
+  return itemsFrom(await fetchJson(url)).flatMap((item): PublicPlace[] => {
     const latitude = Number(item.LAT ?? item.lat), longitude = Number(item.LNG ?? item.lng)
-    const sourceId = item.UC_SEQ ?? item.ucSeq
-    const title = item.MAIN_TITLE ?? item.mainTitle
+    const sourceId = item.UC_SEQ ?? item.ucSeq, title = item.MAIN_TITLE ?? item.mainTitle
     if (!sourceId || !title || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return []
-    return [{
-      provider: 'BUSAN_FOOD', sourceId: String(sourceId), title: String(title), category: '맛집',
-      address: String(item.ADDR1 ?? item.addr1 ?? ''), latitude, longitude,
-      telephone: String(item.CNTCT_TEL ?? item.cntctTel ?? ''),
-      imageUrl: String(item.MAIN_IMG_NORMAL ?? item.mainImgNormal ?? ''),
-      sourceUrl: 'https://www.visitbusan.net/', officialTags: ['부산광역시 추천 맛집'],
-      sourceModifiedAt: String(item.DATA_DAY ?? item.dataDay ?? ''),
-    }]
+    return [{ provider: 'BUSAN_FOOD', sourceId: String(sourceId), title: String(title), category: '맛집',
+      address: String(item.ADDR1 ?? item.addr1 ?? ''), latitude, longitude, telephone: String(item.CNTCT_TEL ?? item.cntctTel ?? ''),
+      imageUrl: String(item.MAIN_IMG_NORMAL ?? item.mainImgNormal ?? ''), sourceUrl: 'https://www.visitbusan.net/',
+      officialTags: ['부산광역시 추천 맛집'], sourceModifiedAt: String(item.DATA_DAY ?? item.dataDay ?? '') }]
   })
 }
 
 async function modelRestaurantPlaces(serviceKey: string) {
-  const url = new URL('https://apis.data.go.kr/6260000/BusanTblFnrstrnStusService/getTblFnrstrnStusInfo')
-  url.searchParams.set('serviceKey', decodedServiceKey(serviceKey))
-  url.searchParams.set('resultType', 'json')
-  url.searchParams.set('numOfRows', '1000')
-  url.searchParams.set('pageNo', '1')
-  const data = await fetchJson(url)
-  return itemsFrom(data).flatMap((item): PublicPlace[] => {
+  const url = publicUrl('/6260000/BusanTblFnrstrnStusService/getTblFnrstrnStusInfo', serviceKey)
+  Object.entries({ resultType: 'json', numOfRows: '1000', pageNo: '1' }).forEach(([key, value]) => url.searchParams.set(key, value))
+  return itemsFrom(await fetchJson(url)).flatMap((item): PublicPlace[] => {
     const title = pick(item, 'rstrtNm', 'RSTR_NM', '업소명', 'bsshNm', 'MAIN_TITLE')
     const address = pick(item, 'addr', 'ADDR', '소재지', 'roadNmAddr', 'ADDR1')
-    const latitude = Number(pick(item, 'lat', 'LAT', 'latitude', '위도'))
-    const longitude = Number(pick(item, 'lng', 'LNG', 'longitude', '경도'))
+    const latitude = Number(pick(item, 'lat', 'LAT', 'latitude', '위도')), longitude = Number(pick(item, 'lng', 'LNG', 'longitude', '경도'))
     if (!title || !Number.isFinite(latitude) || !Number.isFinite(longitude) || !latitude || !longitude) return []
-    const sourceId = String(pick(item, 'rstrtSn', 'RSTR_SN', '관리번호', 'idx') || `${title}:${address}`)
-    return [{
-      provider: 'BUSAN_MODEL_FOOD', sourceId, title: String(title), category: '맛집', address: String(address),
-      latitude, longitude, telephone: String(pick(item, 'tel', 'TEL', '전화번호')),
-      imageUrl: '', sourceUrl: 'https://www.busan.go.kr/', officialTags: ['부산광역시 모범음식점'],
-      sourceModifiedAt: String(pick(item, 'dsgnYmd', 'DSGN_YMD', '지정일자')),
-    }]
-  })
-}
-
-const xmlValue = (xml: string, tag: string) => {
-  const match = xml.match(new RegExp(`<${tag}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${tag}>`, 'i'))
-  return match?.[1]?.trim() ?? ''
-}
-
-async function heritagePlaces() {
-  const url = new URL('https://www.khs.go.kr/cha/SearchKindOpenapiList.do')
-  url.searchParams.set('pageUnit', '1000')
-  url.searchParams.set('pageIndex', '1')
-  url.searchParams.set('ccbaCtcd', '21')
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`${url.pathname}: ${response.status}`)
-  const xml = await response.text()
-  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].flatMap((match): PublicPlace[] => {
-    const item = match[1]
-    const latitude = Number(xmlValue(item, 'latitude')), longitude = Number(xmlValue(item, 'longitude'))
-    const sourceId = xmlValue(item, 'ccbaCpno') || `${xmlValue(item, 'ccbaKdcd')}-${xmlValue(item, 'ccbaAsno')}`
-    const title = xmlValue(item, 'ccbaMnm1')
-    if (!sourceId || !title || !Number.isFinite(latitude) || !Number.isFinite(longitude) || !latitude || !longitude) return []
-    const designation = xmlValue(item, 'ccmaName')
-    return [{
-      provider: 'KHS_HERITAGE', sourceId, title, category: '역사·문화',
-      address: ['부산', xmlValue(item, 'ccsiName'), xmlValue(item, 'ccbaAdmin')].filter(Boolean).join(' '),
-      latitude, longitude, telephone: '', imageUrl: '',
-      sourceUrl: 'https://www.khs.go.kr/', officialTags: [designation || '국가유산청 등록 유산'],
-      sourceModifiedAt: xmlValue(item, 'regDt'),
-    }]
+    return [{ provider: 'BUSAN_MODEL_FOOD', sourceId: String(pick(item, 'rstrtSn', 'RSTR_SN', '관리번호', 'idx') || `${title}:${address}`),
+      title: String(title), category: '맛집', address: String(address), latitude, longitude,
+      telephone: String(pick(item, 'tel', 'TEL', '전화번호')), imageUrl: '', sourceUrl: 'https://www.busan.go.kr/',
+      officialTags: ['부산광역시 모범음식점'], sourceModifiedAt: String(pick(item, 'dsgnYmd', 'DSGN_YMD', '지정일자')) }]
   })
 }
 
@@ -163,48 +98,134 @@ async function savePlaces(db: D1Database, provider: string, places: PublicPlace[
       place.telephone, place.imageUrl, place.sourceUrl, JSON.stringify(place.officialTags), place.sourceModifiedAt ?? null, now))
   for (let index = 0; index < statements.length; index += 50) await db.batch(statements.slice(index, index + 50))
   await db.prepare('UPDATE public_places SET active=0 WHERE provider=?1 AND synced_at < ?2').bind(provider, now).run()
+  await markReady(db, provider, places.length, now)
+}
+
+async function enrichTourDetails(db: D1Database, serviceKey: string, limit = 40) {
+  const stale = Math.floor(Date.now() / 1000) - 30 * 86400
+  const rows = await db.prepare(`SELECT source_id,category FROM public_places WHERE provider='TOUR_API' AND active=1
+    AND (detail_synced_at IS NULL OR detail_synced_at < ?1) ORDER BY COALESCE(detail_synced_at,0), id LIMIT ?2`).bind(stale, limit).all<any>()
+  const now = Math.floor(Date.now() / 1000)
+  for (const row of rows.results) {
+    const commonUrl = publicUrl('/B551011/KorService2/detailCommon2', serviceKey)
+    Object.entries({ MobileOS: 'ETC', MobileApp: 'Moyeo', _type: 'json', contentId: String(row.source_id), defaultYN: 'Y' })
+      .forEach(([key, value]) => commonUrl.searchParams.set(key, value))
+    const common = itemsFrom(await fetchJson(commonUrl))[0] ?? {}
+    const introUrl = publicUrl('/B551011/KorService2/detailIntro2', serviceKey)
+    Object.entries({ MobileOS: 'ETC', MobileApp: 'Moyeo', _type: 'json', contentId: String(row.source_id), contentTypeId: Object.keys(TOUR_TYPES).find((key) => TOUR_TYPES[key] === row.category) ?? '' })
+      .forEach(([key, value]) => introUrl.searchParams.set(key, value))
+    const intro = itemsFrom(await fetchJson(introUrl))[0] ?? {}
+    await db.prepare(`UPDATE public_places SET overview=?1,opening_hours=?2,rest_date=?3,fee_info=?4,detail_synced_at=?5 WHERE provider='TOUR_API' AND source_id=?6`)
+      .bind(clean(common.overview), clean(pick(intro, 'usetime', 'playtime', 'opentimefood', 'usetimeculture', 'usetimeleports', 'saleitemcost')),
+        clean(pick(intro, 'restdate', 'restdatefood', 'restdateculture', 'restdateshopping', 'restdateleports')),
+        clean(pick(intro, 'usefee', 'usefeeleports', 'parkingfee', 'firstmenu')), now, row.source_id).run()
+  }
+  await markReady(db, 'TOUR_DETAIL', rows.results.length, now)
+}
+
+async function syncBusanExhibitions(db: D1Database, serviceKey: string) {
+  const url = publicUrl('/6260000/BusanCultureExhibitDetailService/getBusanCultureExhibitDetail', serviceKey)
+  Object.entries({ resultType: 'json', numOfRows: '1000', pageNo: '1' }).forEach(([key, value]) => url.searchParams.set(key, value))
+  const events = itemsFrom(await fetchJson(url)), now = Math.floor(Date.now() / 1000)
+  const statements = events.flatMap((item) => {
+    const id = pick(item, 'res_no'), title = pick(item, 'title')
+    if (!id || !title) return []
+    return [db.prepare(`INSERT INTO public_events (provider,source_id,title,venue_name,start_date,end_date,opening_hours,fee_info,source_url,synced_at,active)
+      VALUES ('BUSAN_EXHIBITION',?1,?2,?3,?4,?5,?6,?7,?8,?9,1)
+      ON CONFLICT(provider,source_id) DO UPDATE SET title=excluded.title,venue_name=excluded.venue_name,start_date=excluded.start_date,
+      end_date=excluded.end_date,opening_hours=excluded.opening_hours,fee_info=excluded.fee_info,source_url=excluded.source_url,synced_at=excluded.synced_at,active=1`)
+      .bind(String(id), clean(title), clean(item.place_nm), String(item.op_st_dt ?? ''), String(item.op_ed_dt ?? ''), clean(item.showtime), clean(item.price), clean(item.dabom_url), now)]
+  })
+  for (let index = 0; index < statements.length; index += 50) await db.batch(statements.slice(index, index + 50))
+  await db.prepare("UPDATE public_events SET active=0 WHERE provider='BUSAN_EXHIBITION' AND synced_at < ?1").bind(now).run()
+  await markReady(db, 'BUSAN_EXHIBITION', statements.length, now)
+}
+
+function latestWeatherBase(now = new Date()) {
+  const kst = new Date(now.getTime() + 9 * 3600_000 - 10 * 60_000)
+  const baseHours = [2, 5, 8, 11, 14, 17, 20, 23]
+  let hour = [...baseHours].reverse().find((value) => value <= kst.getUTCHours())
+  if (hour === undefined) { kst.setUTCDate(kst.getUTCDate() - 1); hour = 23 }
+  const date = `${kst.getUTCFullYear()}${String(kst.getUTCMonth() + 1).padStart(2, '0')}${String(kst.getUTCDate()).padStart(2, '0')}`
+  return { date, time: `${String(hour).padStart(2, '0')}00` }
+}
+
+async function syncWeather(db: D1Database, serviceKey: string) {
+  const base = latestWeatherBase()
+  const url = publicUrl('/1360000/VilageFcstInfoService_2.0/getVilageFcst', serviceKey)
+  Object.entries({ pageNo: '1', numOfRows: '1000', dataType: 'JSON', base_date: base.date, base_time: base.time, nx: '98', ny: '76' })
+    .forEach(([key, value]) => url.searchParams.set(key, value))
+  const grouped = new Map<string, Record<string, number>>()
+  for (const item of itemsFrom(await fetchJson(url))) {
+    const key = `${item.fcstDate}${item.fcstTime}`
+    const row = grouped.get(key) ?? {}
+    row[String(item.category)] = Number(item.fcstValue)
+    grouped.set(key, row)
+  }
+  const now = Math.floor(Date.now() / 1000)
+  const statements = [...grouped].map(([at, row]) => db.prepare(`INSERT INTO weather_forecasts
+    (forecast_at,forecast_date,forecast_time,temperature,rain_probability,precipitation_type,sky,wind_speed,fetched_at)
+    VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(forecast_at) DO UPDATE SET temperature=excluded.temperature,
+    rain_probability=excluded.rain_probability,precipitation_type=excluded.precipitation_type,sky=excluded.sky,wind_speed=excluded.wind_speed,fetched_at=excluded.fetched_at`)
+    .bind(at, at.slice(0, 8), at.slice(8), row.TMP ?? null, row.POP ?? null, row.PTY ?? null, row.SKY ?? null, row.WSD ?? null, now))
+  for (let index = 0; index < statements.length; index += 50) await db.batch(statements.slice(index, index + 50))
+  await db.prepare('DELETE FROM weather_forecasts WHERE forecast_date < ?1').bind(base.date).run()
+  await markReady(db, 'KMA_FORECAST', statements.length, now)
+}
+
+async function markReady(db: D1Database, provider: string, count: number, now = Math.floor(Date.now() / 1000)) {
   await db.prepare(`INSERT INTO public_data_sync (provider,status,last_started_at,last_completed_at,item_count,error_message)
     VALUES (?1,'ready',?2,?2,?3,NULL) ON CONFLICT(provider) DO UPDATE SET status='ready',last_completed_at=?2,item_count=?3,error_message=NULL`)
-    .bind(provider, now, places.length).run()
+    .bind(provider, now, count).run()
 }
 
 export async function syncPublicData(env: PublicDataEnv) {
-  const providers = [
-    { id: 'KHS_HERITAGE', load: () => heritagePlaces() },
-    ...(env.PUBLIC_DATA_SERVICE_KEY ? [
-      { id: 'TOUR_API', load: () => tourPlaces(env.PUBLIC_DATA_SERVICE_KEY!) },
-      { id: 'BUSAN_FOOD', load: () => busanFoodPlaces(env.PUBLIC_DATA_SERVICE_KEY!) },
-      { id: 'BUSAN_MODEL_FOOD', load: () => modelRestaurantPlaces(env.PUBLIC_DATA_SERVICE_KEY!) },
-    ] : []),
+  if (!env.PUBLIC_DATA_SERVICE_KEY) return { enabled: false, synced: [] }
+  const key = env.PUBLIC_DATA_SERVICE_KEY, synced: string[] = []
+  const tasks: Array<{ id: string; run: () => Promise<void> }> = [
+    { id: 'TOUR_API', run: async () => savePlaces(env.DB, 'TOUR_API', await tourPlaces(key)) },
+    { id: 'BUSAN_FOOD', run: async () => savePlaces(env.DB, 'BUSAN_FOOD', await busanFoodPlaces(key)) },
+    { id: 'BUSAN_MODEL_FOOD', run: async () => savePlaces(env.DB, 'BUSAN_MODEL_FOOD', await modelRestaurantPlaces(key)) },
+    { id: 'TOUR_DETAIL', run: () => enrichTourDetails(env.DB, key) },
+    { id: 'BUSAN_EXHIBITION', run: () => syncBusanExhibitions(env.DB, key) },
+    { id: 'KMA_FORECAST', run: () => syncWeather(env.DB, key) },
   ]
-  const synced: string[] = []
-  for (const provider of providers) {
+  for (const task of tasks) {
     const now = Math.floor(Date.now() / 1000)
-    await env.DB.prepare(`INSERT INTO public_data_sync (provider,status,last_started_at,item_count)
-      VALUES (?1,'syncing',?2,0) ON CONFLICT(provider) DO UPDATE SET status='syncing',last_started_at=?2,error_message=NULL`).bind(provider.id, now).run()
-    try {
-      const places = await provider.load()
-      await savePlaces(env.DB, provider.id, places)
-      synced.push(provider.id)
-    } catch (reason) {
+    await env.DB.prepare(`INSERT INTO public_data_sync (provider,status,last_started_at,item_count) VALUES (?1,'syncing',?2,0)
+      ON CONFLICT(provider) DO UPDATE SET status='syncing',last_started_at=?2,error_message=NULL`).bind(task.id, now).run()
+    try { await task.run(); synced.push(task.id) }
+    catch (reason) {
       const message = reason instanceof Error ? reason.message : String(reason)
-      console.error('public-data-sync-failed', { provider: provider.id, message })
-      await env.DB.prepare("UPDATE public_data_sync SET status='failed',error_message=?1 WHERE provider=?2").bind(message.slice(0, 500), provider.id).run()
+      console.error('public-data-sync-failed', { provider: task.id, message })
+      await env.DB.prepare("UPDATE public_data_sync SET status='failed',error_message=?1 WHERE provider=?2").bind(message.slice(0, 500), task.id).run()
     }
   }
-  return { enabled: Boolean(env.PUBLIC_DATA_SERVICE_KEY), synced }
+  return { enabled: true, synced }
 }
 
-export async function nearbyPublicPlaces(db: D1Database, center: { latitude: number; longitude: number }, radiusKm: number, limit = 120) {
-  const latDelta = radiusKm / 111
-  const lonDelta = radiusKm / (111 * Math.max(.2, Math.cos(center.latitude * Math.PI / 180)))
-  const result = await db.prepare(`SELECT provider,source_id,title,category,address,latitude,longitude,source_url,official_tags,source_modified_at
-    FROM public_places WHERE active=1 AND latitude BETWEEN ?1 AND ?2 AND longitude BETWEEN ?3 AND ?4 LIMIT ?5`)
-    .bind(center.latitude - latDelta, center.latitude + latDelta, center.longitude - lonDelta, center.longitude + lonDelta, limit).all<any>()
+export async function nearbyPublicPlaces(db: D1Database, center: { latitude: number; longitude: number }, radiusKm: number, limit = 120, travelDate?: string) {
+  const latDelta = radiusKm / 111, lonDelta = radiusKm / (111 * Math.max(.2, Math.cos(center.latitude * Math.PI / 180)))
+  const date = (travelDate ?? '').replace(/-/g, '')
+  const result = await db.prepare(`SELECT p.provider,p.source_id,p.title,p.category,p.address,p.latitude,p.longitude,p.source_url,p.official_tags,
+    p.source_modified_at,p.overview,p.opening_hours,p.rest_date,p.fee_info,
+    e.title event_title,e.opening_hours event_hours,e.fee_info event_fee
+    FROM public_places p LEFT JOIN public_events e ON e.active=1 AND e.venue_name<>''
+      AND (instr(lower(p.title),lower(e.venue_name))>0 OR instr(lower(e.venue_name),lower(p.title))>0)
+      AND (?1='' OR (replace(e.start_date,'-','')<=?1 AND replace(e.end_date,'-','')>=?1))
+    WHERE p.active=1 AND p.latitude BETWEEN ?2 AND ?3 AND p.longitude BETWEEN ?4 AND ?5 LIMIT ?6`)
+    .bind(date, center.latitude - latDelta, center.latitude + latDelta, center.longitude - lonDelta, center.longitude + lonDelta, limit).all<any>()
   return result.results
+}
+
+export async function weatherRiskForDate(db: D1Database, travelDate?: string) {
+  if (!travelDate) return false
+  const date = travelDate.replace(/-/g, '')
+  const row = await db.prepare(`SELECT MAX(COALESCE(rain_probability,0)) rain,MAX(COALESCE(precipitation_type,0)) precipitation,
+    MAX(COALESCE(wind_speed,0)) wind FROM weather_forecasts WHERE forecast_date=?1`).bind(date).first<any>()
+  return Boolean(row && (Number(row.rain) >= 60 || Number(row.precipitation) > 0 || Number(row.wind) >= 10))
 }
 
 export async function publicDataStatus(db: D1Database) {
-  const result = await db.prepare('SELECT provider,status,last_completed_at,item_count,error_message FROM public_data_sync ORDER BY provider').all()
-  return result.results
+  return (await db.prepare('SELECT provider,status,last_completed_at,item_count,error_message FROM public_data_sync ORDER BY provider').all()).results
 }
