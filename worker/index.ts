@@ -9,6 +9,8 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import type { ImageConfig } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import { deleteExpiredRooms, handleRoomApi } from "./rooms";
+import { cachedPlaceSearch } from "./recommendations";
+import { publicDataStatus, syncPublicData } from "./public-data";
 
 interface Env {
   DB: D1Database;
@@ -24,6 +26,7 @@ interface Env {
   NAVER_MAPS_CLIENT_SECRET?: string;
   NAVER_SEARCH_CLIENT_ID?: string;
   NAVER_SEARCH_CLIENT_SECRET?: string;
+  PUBLIC_DATA_SERVICE_KEY?: string;
 }
 
 interface ExecutionContext {
@@ -56,6 +59,12 @@ export default {
       }, { headers: { "Cache-Control": "public, max-age=3600" } });
     }
 
+    if (url.pathname === "/api/public-data/status" && request.method === "GET") {
+      return Response.json({ enabled: Boolean(env.PUBLIC_DATA_SERVICE_KEY), providers: await publicDataStatus(env.DB) }, {
+        headers: { "Cache-Control": "public, max-age=300" },
+      });
+    }
+
     if (url.pathname === "/api/naver/local") {
       if (request.method !== "GET") return new Response("Method Not Allowed", { status: 405 });
       const query = url.searchParams.get("query")?.trim();
@@ -63,30 +72,23 @@ export default {
       if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) {
         return Response.json({ error: "네이버 지역 검색이 아직 설정되지 않았습니다." }, { status: 503 });
       }
-      const endpoint = new URL("https://openapi.naver.com/v1/search/local.json");
-      endpoint.searchParams.set("query", query);
-      endpoint.searchParams.set("display", "5");
-      endpoint.searchParams.set("sort", "random");
-      const response = await fetch(endpoint, {
-        headers: {
-          "X-Naver-Client-Id": env.NAVER_SEARCH_CLIENT_ID,
-          "X-Naver-Client-Secret": env.NAVER_SEARCH_CLIENT_SECRET,
-        },
-      });
-      if (!response.ok) return Response.json({ error: "네이버 장소 정보를 불러오지 못했습니다." }, { status: 502 });
-      const data = await response.json() as { items?: Array<Record<string, unknown>> };
-      const stripTags = (value: unknown) => String(value ?? "").replace(/<[^>]*>/g, "");
-      return Response.json({
-        items: (data.items ?? []).map((item) => ({
-          title: stripTags(item.title),
+      try {
+        const items = await cachedPlaceSearch(query, {
+          clientId: env.NAVER_SEARCH_CLIENT_ID,
+          clientSecret: env.NAVER_SEARCH_CLIENT_SECRET,
+        }, env.DB);
+        return Response.json({ items: items.map((item) => ({
+          title: item.title,
           category: item.category,
-          address: item.address,
           roadAddress: item.roadAddress,
-          mapx: item.mapx,
-          mapy: item.mapy,
-          link: item.link,
-        })),
-      }, { headers: { "Cache-Control": "public, max-age=900" } });
+          mapx: Math.round(item.longitude * 10_000_000),
+          mapy: Math.round(item.latitude * 10_000_000),
+          link: `https://map.naver.com/p/search/${encodeURIComponent(item.title)}`,
+        })) }, { headers: { "Cache-Control": "public, max-age=900, stale-while-revalidate=86400" } });
+      } catch (reason) {
+        console.error("naver-local-api-failed", reason);
+        return Response.json({ error: "네이버 장소 정보를 불러오지 못했습니다." }, { status: 502 });
+      }
     }
 
     // Image optimization via Cloudflare Images binding.
@@ -109,6 +111,9 @@ export default {
     return handler.fetch(request, env, ctx);
   },
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(deleteExpiredRooms(env.DB));
+    ctx.waitUntil(Promise.all([
+      deleteExpiredRooms(env.DB),
+      syncPublicData({ DB: env.DB, PUBLIC_DATA_SERVICE_KEY: env.PUBLIC_DATA_SERVICE_KEY }),
+    ]));
   },
 };

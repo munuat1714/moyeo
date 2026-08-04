@@ -176,7 +176,7 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
     }
     try {
       const preferences = members.results.flatMap((item) => item.preference_json ? [JSON.parse(item.preference_json)] : []);
-      const courses = await generateRouteCourses(room.origin, room.destination, searchCredentials, preferences, room.route_mode === 'open' ? room.preferred_area : undefined);
+      const courses = await generateRouteCourses(room.origin, room.destination, searchCredentials, preferences, room.route_mode === 'open' ? room.preferred_area : undefined, db);
       const encoded = JSON.stringify(courses);
       await db.prepare("UPDATE rooms SET recommendation_json = ?1, recommendation_status = 'ready', recommendation_retry_at = NULL WHERE id = ?2 AND recommendation_json IS NULL").bind(encoded, roomId).run();
       const saved = await db.prepare('SELECT recommendation_json FROM rooms WHERE id = ?1').bind(roomId).first<{ recommendation_json: string }>();
@@ -248,5 +248,9 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
 }
 
 export async function deleteExpiredRooms(db: D1Database) {
-  await db.prepare('DELETE FROM rooms WHERE expires_at <= ?1').bind(Math.floor(Date.now() / 1000)).run();
+  const now = Math.floor(Date.now() / 1000);
+  await db.batch([
+    db.prepare('DELETE FROM rooms WHERE expires_at <= ?1').bind(now),
+    db.prepare('DELETE FROM place_search_cache WHERE expires_at < ?1').bind(now - 60 * 24 * 60 * 60),
+  ]);
 }

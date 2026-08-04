@@ -1,6 +1,8 @@
 import type { Course, Stop } from '../src/types'
+import { nearbyPublicPlaces } from './public-data'
 
 export type SearchCredentials = { clientId?: string; clientSecret?: string }
+export type SearchCache = D1Database
 
 type SearchPlace = {
   title: string
@@ -15,8 +17,11 @@ type SearchPlace = {
 
 type RoutePreference = { themes?: string[]; placeCount?: number; pace?: string; food?: string | string[]; mood?: string | string[] }
 
-export const MAX_ROUTE_KEYWORDS = 4
+export const MAX_ROUTE_KEYWORDS = 3
 export const recommendationSearchRequestCount = (sameZone: boolean) => 2 + (sameZone ? 1 : 2) * MAX_ROUTE_KEYWORDS
+
+const SEARCH_CACHE_TTL_SECONDS = 14 * 24 * 60 * 60
+const SEARCH_STALE_TTL_SECONDS = 60 * 24 * 60 * 60
 
 export const curatedFallbackPlaces: SearchPlace[] = [
   { title: '감천문화마을', category: '관광명소', roadAddress: '부산 사하구 감내2로 203', latitude: 35.0975, longitude: 129.0106, keyword: '관광명소' },
@@ -81,9 +86,46 @@ const strip = (value: unknown) => String(value ?? '')
 
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
-async function search(query: string, keyword: string, credentials: SearchCredentials, display = 5) {
+const publicKeyword = (category: string) => category === '맛집' ? '맛집'
+  : category === '액티비티' ? '체험'
+    : category === '쇼핑' ? '쇼핑'
+      : category === '역사·문화' || category === '공연·축제' ? '전시' : '관광명소'
+
+const mapPublicPlaces = (rows: any[]): SearchPlace[] => rows.map((row) => ({
+  title: String(row.title), category: String(row.category), roadAddress: String(row.address ?? ''),
+  latitude: Number(row.latitude), longitude: Number(row.longitude), keyword: publicKeyword(String(row.category)),
+  source: row.provider === 'BUSAN_FOOD' ? '부산광역시 맛집정보'
+    : row.provider === 'BUSAN_MODEL_FOOD' ? '부산광역시 모범음식점'
+    : row.provider === 'KHS_HERITAGE' ? '국가유산청 공식 데이터' : '한국관광공사 TourAPI',
+  verifiedAt: String(row.source_modified_at || new Date().toISOString().slice(0, 10)).slice(0, 10),
+}))
+
+const normalizeSearchQuery = (query: string) => query.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ko-KR')
+
+async function readSearchCache(db: SearchCache | undefined, cacheKey: string, allowStale = false) {
+  if (!db) return null
+  const cutoff = Math.floor(Date.now() / 1000) - (allowStale ? SEARCH_STALE_TTL_SECONDS : 0)
+  const row = await db.prepare('SELECT response_json, expires_at FROM place_search_cache WHERE cache_key = ?1 AND expires_at >= ?2')
+    .bind(cacheKey, cutoff).first<{ response_json: string; expires_at: number }>()
+  if (!row || (!allowStale && row.expires_at < Math.floor(Date.now() / 1000))) return null
+  try { return JSON.parse(row.response_json) as SearchPlace[] } catch { return null }
+}
+
+async function writeSearchCache(db: SearchCache | undefined, cacheKey: string, places: SearchPlace[]) {
+  if (!db) return
+  const now = Math.floor(Date.now() / 1000)
+  await db.prepare(`INSERT INTO place_search_cache (cache_key,response_json,fetched_at,expires_at)
+    VALUES (?1,?2,?3,?4)
+    ON CONFLICT(cache_key) DO UPDATE SET response_json=excluded.response_json, fetched_at=excluded.fetched_at, expires_at=excluded.expires_at`)
+    .bind(cacheKey, JSON.stringify(places), now, now + SEARCH_CACHE_TTL_SECONDS).run()
+}
+
+async function search(query: string, keyword: string, credentials: SearchCredentials, display = 5, db?: SearchCache) {
+  const cacheKey = `naver:local:v1:${display}:${normalizeSearchQuery(query)}`
+  const cached = await readSearchCache(db, cacheKey)
+  if (cached) return cached.map((place) => ({ ...place, keyword }))
   let data: { items?: Array<Record<string, unknown>> } | null = null
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     const endpoint = new URL('https://openapi.naver.com/v1/search/local.json')
     endpoint.searchParams.set('query', query)
     endpoint.searchParams.set('display', String(display))
@@ -97,7 +139,9 @@ async function search(query: string, keyword: string, credentials: SearchCredent
       break
     }
     const detail = await response.text().catch(() => '')
-    if (response.status !== 429 || attempt === 2) {
+    if (response.status !== 429 || attempt === 1) {
+      const stale = await readSearchCache(db, cacheKey, true)
+      if (stale) return stale.map((place) => ({ ...place, keyword }))
       console.error('naver-local-search-error', { status: response.status, query, detail: detail.slice(0, 300) })
       const error = new Error(response.status === 429
         ? '네이버 검색 요청이 많아 잠시 쉬고 있어요. 자동으로 다시 시도합니다.'
@@ -110,12 +154,18 @@ async function search(query: string, keyword: string, credentials: SearchCredent
     await sleep(delay + Math.floor(Math.random() * 300))
   }
   if (!data) throw new Error('네이버 장소 검색 결과를 불러오지 못했습니다.')
-  return (data.items ?? []).flatMap((item): SearchPlace[] => {
+  const places = (data.items ?? []).flatMap((item): SearchPlace[] => {
     const longitude = Number(item.mapx) / 10_000_000
     const latitude = Number(item.mapy) / 10_000_000
     if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return []
-    return [{ title: strip(item.title), category: strip(item.category), roadAddress: strip(item.roadAddress || item.address), longitude, latitude, keyword }]
+    return [{ title: strip(item.title), category: strip(item.category), roadAddress: strip(item.roadAddress || item.address), longitude, latitude, keyword: '' }]
   })
+  await writeSearchCache(db, cacheKey, places)
+  return places.map((place) => ({ ...place, keyword }))
+}
+
+export function cachedPlaceSearch(query: string, credentials: SearchCredentials, db: SearchCache, display = 5) {
+  return search(query, '', credentials, display, db)
 }
 
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, task: (item: T) => Promise<R>) {
@@ -207,7 +257,7 @@ export function selectPlaces(pool: SearchPlace[], origin: SearchPlace, destinati
   return selected
 }
 
-async function generateOpenRouteCourses(preferredArea: string, credentials: SearchCredentials, preferences: RoutePreference[]) {
+async function generateOpenRouteCourses(preferredArea: string, credentials: SearchCredentials, preferences: RoutePreference[], db?: SearchCache) {
   const themeCounts: Record<string, number> = {}
   preferences.flatMap((preference) => preference.themes ?? []).forEach((theme) => { themeCounts[theme] = (themeCounts[theme] ?? 0) + 1 })
   const topThemes = Object.entries(themeCounts).sort((a, b) => b[1] - a[1]).map(([theme]) => theme)
@@ -215,11 +265,19 @@ async function generateOpenRouteCourses(preferredArea: string, credentials: Sear
   const visitCount = resolveVisitCount(preferences)
   const selectedZone = openRouteZones.find((zone) => zone.label === preferredArea)
   const assignments = profiles.map((profile, index) => ({ profile, zone: selectedZone ?? openRouteZones[index] }))
+  const publicByZone = new Map<string, SearchPlace[]>()
+  if (db) {
+    await Promise.all([...new Map(assignments.map(({ zone }) => [zone.label, zone])).values()].map(async (zone) => {
+      const rows = await nearbyPublicPlaces(db, zone, 6, 120)
+      publicByZone.set(zone.label, mapPublicPlaces(rows))
+    }))
+  }
   const profileKeyword: Record<string, string> = { balance: '맛집', slow: '카페', active: '체험' }
-  const jobs = assignments.flatMap(({ profile, zone }) => [profileKeyword[profile.id], teamKeywords[0] ?? '관광명소'].map((keyword) => ({ zone, keyword })))
-    .filter((job, index, all) => all.findIndex((item) => item.zone.label === job.zone.label && item.keyword === job.keyword) === index)
+  const jobs = credentials.clientId && credentials.clientSecret ? assignments.filter(({ zone }) => (publicByZone.get(zone.label)?.length ?? 0) < Math.max(6, visitCount * 2))
+    .flatMap(({ profile, zone }) => [profileKeyword[profile.id], teamKeywords[0] ?? '관광명소'].map((keyword) => ({ zone, keyword })))
+    .filter((job, index, all) => all.findIndex((item) => item.zone.label === job.zone.label && item.keyword === job.keyword) === index) : []
   const batches = await mapWithConcurrency(jobs, 2, async ({ zone, keyword }) => {
-    try { return await search(`부산 ${zone.query} ${keyword}`, keyword, credentials) }
+    try { return await search(`부산 ${zone.query} ${keyword}`, keyword, credentials, 5, db) }
     catch (reason) {
       console.warn('naver-open-route-search-skipped', { zone: zone.label, keyword, reason: reason instanceof Error ? reason.message : String(reason) })
       return []
@@ -231,7 +289,7 @@ async function generateOpenRouteCourses(preferredArea: string, credentials: Sear
 
   return assignments.map(({ profile, zone }) => {
     const center: SearchPlace = { title: `${zone.label} 중심`, category: '권역', roadAddress: '', latitude: zone.latitude, longitude: zone.longitude, keyword: '관광명소' }
-    const live = liveByZone.get(zone.label) ?? []
+    const live = [...(publicByZone.get(zone.label) ?? []), ...(liveByZone.get(zone.label) ?? [])]
     const liveNearby = live.filter((place) => distanceKm(center, place) <= 3)
     const liveExpanded = live.filter((place) => distanceKm(center, place) <= 6)
     const nearbyFallback = curatedFallbackPlaces.filter((place) => distanceKm(center, place) <= 3)
@@ -252,12 +310,15 @@ async function generateOpenRouteCourses(preferredArea: string, credentials: Sear
   })
 }
 
-export async function generateRouteCourses(originName: string, destinationName: string, credentials: SearchCredentials, preferences: RoutePreference[] = [], preferredArea?: string): Promise<Course[]> {
-  if (!credentials.clientId || !credentials.clientSecret) throw new Error('네이버 지역검색 설정이 필요합니다.')
-  if (preferredArea) return generateOpenRouteCourses(preferredArea, credentials, preferences)
+export async function generateRouteCourses(originName: string, destinationName: string, credentials: SearchCredentials, preferences: RoutePreference[] = [], preferredArea?: string, db?: SearchCache): Promise<Course[]> {
+  if (!credentials.clientId || !credentials.clientSecret) {
+    if (preferredArea && db) return generateOpenRouteCourses(preferredArea, credentials, preferences, db)
+    throw new Error('출발·도착 장소의 좌표 확인을 위해 네이버 지역검색 설정이 필요합니다.')
+  }
+  if (preferredArea) return generateOpenRouteCourses(preferredArea, credentials, preferences, db)
   const [originResults, destinationResults] = await Promise.all([
-    search(`부산 ${originName}`, '출발지', credentials, 1),
-    search(`부산 ${destinationName}`, '도착지', credentials, 1),
+    search(`부산 ${originName}`, '출발지', credentials, 1, db),
+    search(`부산 ${destinationName}`, '도착지', credentials, 1, db),
   ])
   const origin = originResults[0], destination = destinationResults[0]
   if (!origin || !destination) throw new Error('출발 또는 도착 장소를 찾지 못했습니다.')
@@ -277,17 +338,20 @@ export async function generateRouteCourses(originName: string, destinationName: 
   const visitCount = resolveVisitCount(preferences)
   const keywords = [...new Set([teamKeywords[0] ?? '맛집', '카페', '관광명소', '체험'])].slice(0, MAX_ROUTE_KEYWORDS)
   const zones = originName.trim() === destinationName.trim() ? [originName] : [originName, destinationName]
-  await sleep(Math.floor(Math.random() * 500))
-  const searchJobs = zones.flatMap((zone) => keywords.map((keyword) => ({ zone, keyword })))
+  const center = { latitude: (origin.latitude + destination.latitude) / 2, longitude: (origin.longitude + destination.longitude) / 2 }
+  const publicPool = db ? mapPublicPlaces(await nearbyPublicPlaces(db, center, nearbyTrip ? 6 : Math.max(6, Math.min(12, distanceKm(origin, destination))), 150)) : []
+  if (publicPool.length < Math.max(8, visitCount * 2)) await sleep(Math.floor(Math.random() * 500))
+  const searchJobs = publicPool.length >= Math.max(8, visitCount * 2) ? [] : zones.flatMap((zone) => keywords.map((keyword) => ({ zone, keyword })))
   const batches = await mapWithConcurrency(searchJobs, 2, async ({ zone, keyword }) => {
-    try { return await search(`부산 ${zone}${nearbyTrip ? ' 주변' : ''} ${keyword}`, keyword, credentials) }
+    try { return await search(`부산 ${zone}${nearbyTrip ? ' 주변' : ''} ${keyword}`, keyword, credentials, 5, db) }
     catch (reason) {
       console.warn('naver-route-search-skipped', { zone, keyword, reason: reason instanceof Error ? reason.message : String(reason) })
       return []
     }
   })
   const livePool = batches.flat().filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
-  const pool = (livePool.length >= 6 ? livePool : [...livePool, ...curatedFallbackPlaces]).filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
+  const combinedPool = [...publicPool, ...livePool]
+  const pool = (combinedPool.length >= 6 ? combinedPool : [...combinedPool, ...curatedFallbackPlaces]).filter((place, index, all) => all.findIndex((item) => item.title === place.title) === index)
 
   const usedAcrossCourses = new Set<string>()
   return profiles.map((profile) => {

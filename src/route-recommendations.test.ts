@@ -60,9 +60,9 @@ describe('경로 기반 추천 거리 계산', () => {
   })
 
   it('추천 한 번의 네이버 검색 요청을 최대 10회로 제한한다', () => {
-    expect(recommendationSearchRequestCount(false)).toBe(10)
-    expect(recommendationSearchRequestCount(true)).toBe(6)
-    expect(recommendationSearchRequestCount(false) * 1000).toBe(10_000)
+    expect(recommendationSearchRequestCount(false)).toBe(8)
+    expect(recommendationSearchRequestCount(true)).toBe(5)
+    expect(recommendationSearchRequestCount(false) * 1000).toBe(8_000)
   })
 
   it('네이버 일부 검색이 실패해도 사용할 부산 검수 장소를 확보한다', () => {
