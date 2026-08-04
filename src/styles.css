@@ -203,6 +203,17 @@ input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,79,.
 .route-mode-options b { font-size: 11px; }.route-mode-options small, .open-route-note, .place-count-note { font-size: 10px; }
 .course-place-preview small, .mini-timeline small, .map-disclaimer, .map-fallback-note, .route-editor-title span, .route-place-editor > small { font-size: 10px; }
 .course-place-preview p, .mini-timeline > div, .route-editor-results b { font-size: 11px; }
+
+/* 여행 만들기 핵심 선택과 확인 정보는 모바일에서도 12px 이상으로 읽히게 합니다. */
+.create-wizard label { font-size: 14px; }.create-wizard input { font-size: 15px; }
+.create-wizard .route-mode-cards b { font-size: 16px; }.create-wizard .route-mode-cards small { font-size: 12px; }
+.create-wizard .area-grid button { font-size: 13px; }.create-wizard .transport-summary b { font-size: 14px; }.create-wizard .transport-summary small { font-size: 12px; }
+.create-wizard .expiry-notice { font-size: 12px; }.create-wizard .create-review small { font-size: 12px; }.create-wizard .create-review b { font-size: 15px; }.create-wizard .create-review em, .create-wizard .create-review button { font-size: 12px; }
+.create-wizard .wizard-actions button { font-size: 15px; }
+
+.click-move-guide { margin: 0 0 14px 49px; padding: 12px; display: flex; align-items: flex-start; gap: 8px; border-radius: 12px; color: var(--green); background: var(--green-soft); }.click-move-guide > svg { flex: none; }.click-move-guide span { display: grid; gap: 3px; }.click-move-guide b { font-size: 12px; }.click-move-guide small { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.click-move-button { min-height: 38px; margin: 2px 6px 8px 0; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; border-radius: 9px; color: var(--ink); background: #f1f3f5; font-size: 11px; font-weight: 800; }.click-move-button.selected { color: white; background: var(--green); }.click-move-button.target { color: var(--green); background: var(--green-soft); box-shadow: inset 0 0 0 1px #9dc6ff; }.timeline-stop.move-selected .stop-card { border-color: var(--green); box-shadow: 0 0 0 2px var(--green-soft); }
+.click-move-button { min-height: 44px; }
 .simple-footer { max-width: 980px; margin: 0 auto; padding: 30px 40px 42px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 24px; color: var(--muted); border-top: 1px solid var(--line); font-size: 11px; }.simple-footer > div { display: flex; align-items: center; gap: 9px; color: var(--ink); }.simple-footer p { margin: 0; }
 
 .landing-mode { width: 100%; max-width: none; background: #fff; box-shadow: none; }
@@ -254,6 +265,7 @@ input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,79,.
   .product-preview { margin: 0 -10px; }.floating-card { min-width: 150px; padding: 10px; }.floating-card.card-one { right: -5px; }.floating-card.card-two { left: -5px; }
   .room-action-icons { justify-content: stretch; }.room-action-icons a, .room-action-icons button { flex: 1; min-width: 0; }
   .live-code { max-width: 105px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .click-move-guide { margin-left: 0; }
 }
 
 @media (min-width: 700px) {

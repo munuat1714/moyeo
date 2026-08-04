@@ -1,4 +1,13 @@
-import type { Course, Member } from './types'
+import type { Course, Member, Stop } from './types'
+
+export function reorderStops(stops: Stop[], fromIndex: number, targetIndex: number) {
+  if (fromIndex === targetIndex || fromIndex < 0 || targetIndex < 0 || fromIndex >= stops.length || targetIndex >= stops.length) return stops
+  const times = stops.map((stop) => stop.time)
+  const next = stops.map((stop) => ({ ...stop }))
+  const [moving] = next.splice(fromIndex, 1)
+  next.splice(targetIndex, 0, moving)
+  return next.map((stop, index) => ({ ...stop, time: times[index] }))
+}
 
 export function allPreferencesComplete(members: Member[]) {
   return members.length > 0 && members.every((member) => Boolean(member.preference))

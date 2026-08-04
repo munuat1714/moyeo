@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { aggregateThemes, allPreferencesComplete, recommendCourses, tallyVotes } from './logic'
-import type { Course, Member } from './types'
+import { aggregateThemes, allPreferencesComplete, recommendCourses, reorderStops, tallyVotes } from './logic'
+import type { Course, Member, Stop } from './types'
 
 const preference = { themes: ['맛집', '사진 명소'], placeCount: 4, food: ['한식'], mood: ['감성적인'] }
 
@@ -45,5 +45,11 @@ describe('여행 그룹 핵심 로직', () => {
     const ranked = recommendCourses([sample('photo', ['사진']), sample('balanced', ['맛집', '산책'])], members)
     expect(ranked[0].id).toBe('balanced')
     expect(ranked[0].match).toBeGreaterThan(ranked[1].match)
+  })
+
+  it('클릭한 장소를 원하는 위치로 옮기고 시간대는 위치에 유지한다', () => {
+    const stop = (time: string, title: string): Stop => ({ time, title, category: '관광', duration: '1시간', price: 0, shared: false, description: '' })
+    const reordered = reorderStops([stop('10:00', 'A'), stop('12:00', 'B'), stop('14:00', 'C')], 0, 2)
+    expect(reordered.map(({ time, title }) => `${time} ${title}`)).toEqual(['10:00 B', '12:00 C', '14:00 A'])
   })
 })
