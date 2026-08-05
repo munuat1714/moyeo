@@ -9,7 +9,7 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import type { ImageConfig } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import { deleteExpiredRooms, handleRoomApi } from "./rooms";
-import { cachedPlaceSearch } from "./recommendations";
+import { cachedPlaceSearch, selectBestPlaceMatch } from "./recommendations";
 import { publicDataStatus, syncPublicData } from "./public-data";
 import { handleAnalyticsDashboard } from "./analytics-dashboard";
 
@@ -97,6 +97,9 @@ export default {
     if (url.pathname === "/api/naver/local") {
       if (request.method !== "GET") return new Response("Method Not Allowed", { status: 405 });
       const query = url.searchParams.get("query")?.trim();
+      const expectedTitle = url.searchParams.get("title")?.trim() || query;
+      const latitude = Number(url.searchParams.get("lat"));
+      const longitude = Number(url.searchParams.get("lng"));
       if (!query || query.length > 80) return Response.json({ error: "검색어를 확인해 주세요." }, { status: 400 });
       if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) {
         return Response.json({ error: "네이버 지역 검색이 아직 설정되지 않았습니다." }, { status: 503 });
@@ -106,7 +109,8 @@ export default {
           clientId: env.NAVER_SEARCH_CLIENT_ID,
           clientSecret: env.NAVER_SEARCH_CLIENT_SECRET,
         }, env.DB);
-        return Response.json({ items: items.map((item) => ({
+        const best = selectBestPlaceMatch(items, { title: expectedTitle, latitude, longitude });
+        return Response.json({ items: (best ? [best] : []).map((item) => ({
           title: item.title,
           category: item.category,
           roadAddress: item.roadAddress,

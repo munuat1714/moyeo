@@ -906,17 +906,25 @@ function RouteMap({ stops }: { stops: Stop[] }) {
 function PlaceLookup({ stop }: { stop: Stop }) {
   const [result, setResult] = useState<{ title: string; roadAddress?: string; link?: string } | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const district = stop.description.match(/부산(?:광역시)?\s+([가-힣]+(?:구|군))/)?.[1] ?? ''
+  const lookupQuery = ['부산', district, stop.title].filter(Boolean).join(' ')
   const lookup = async () => {
     setStatus('loading')
     try {
-      const response = await fetch(`/api/naver/local?query=${encodeURIComponent(`부산 ${stop.title}`)}`)
+      const params = new URLSearchParams({
+        query: lookupQuery,
+        title: stop.title,
+      })
+      if (Number.isFinite(stop.latitude)) params.set('lat', String(stop.latitude))
+      if (Number.isFinite(stop.longitude)) params.set('lng', String(stop.longitude))
+      const response = await fetch(`/api/naver/local?${params}`)
       if (!response.ok) throw new Error('lookup-failed')
       const data = await response.json() as { items?: Array<{ title: string; roadAddress?: string; link?: string }> }
       setResult(data.items?.[0] ?? null)
       setStatus(data.items?.length ? 'idle' : 'error')
     } catch { setStatus('error') }
   }
-  return <div className="place-lookup"><button onClick={lookup} disabled={status === 'loading'}>{status === 'loading' ? '확인 중…' : '네이버 최신정보 확인'}</button><a href={result?.link || stop.placeUrl || `https://map.naver.com/p/search/${encodeURIComponent(stop.title)}`} target="_blank" rel="noreferrer"><ExternalLink size={12} /> 네이버지도</a>{result && <small>{result.title}{result.roadAddress ? ` · ${result.roadAddress}` : ''}</small>}{status === 'error' && <small>API 연결 전이거나 검색 결과가 없습니다. 지도에서 직접 확인해 주세요.</small>}</div>
+  return <div className="place-lookup"><button onClick={lookup} disabled={status === 'loading'}>{status === 'loading' ? '확인 중…' : '네이버 최신정보 확인'}</button><a href={result?.link || `https://map.naver.com/p/search/${encodeURIComponent(lookupQuery)}`} target="_blank" rel="noreferrer"><ExternalLink size={12} /> 네이버지도</a>{result && <small>{result.title}{result.roadAddress ? ` · ${result.roadAddress}` : ''}</small>}{status === 'error' && <small>추천 위치 주변에서 상호가 일치하는 장소를 찾지 못했습니다. 지도 검색 결과를 직접 확인해 주세요.</small>}</div>
 }
 
 function iconFor(category: string) {

@@ -193,6 +193,33 @@ export function distanceKm(a: { latitude: number; longitude: number }, b: { lati
   return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value))
 }
 
+const normalizedPlaceName = (value: string) => strip(value)
+  .toLocaleLowerCase('ko-KR')
+  .replace(/[^\p{L}\p{N}]/gu, '')
+
+export function selectBestPlaceMatch<T extends { title: string; latitude: number; longitude: number }>(
+  items: T[],
+  expected: { title: string; latitude?: number; longitude?: number },
+) {
+  const expectedName = normalizedPlaceName(expected.title)
+  const hasExpectedPoint = Number.isFinite(expected.latitude) && Number.isFinite(expected.longitude)
+  const ranked = items.map((item) => {
+    const candidateName = normalizedPlaceName(item.title)
+    const exactName = candidateName === expectedName
+    const partialName = candidateName.includes(expectedName) || expectedName.includes(candidateName)
+    const distance = hasExpectedPoint
+      ? distanceKm({ latitude: expected.latitude!, longitude: expected.longitude! }, item)
+      : 0
+    return { item, exactName, partialName, distance }
+  }).filter(({ exactName, partialName, distance }) => {
+    if (hasExpectedPoint && distance > 3) return false
+    return exactName || partialName
+  }).sort((a, b) => Number(b.exactName) - Number(a.exactName)
+    || Number(b.partialName) - Number(a.partialName)
+    || a.distance - b.distance)
+  return ranked[0]?.item ?? null
+}
+
 export function resolveVisitCount(preferences: RoutePreference[]) {
   const counts = preferences.map((preference) => preference.placeCount ?? (preference.pace === '여유롭게' ? 3 : preference.pace === '알차게' ? 5 : 4))
   return Math.max(1, Math.min(6, Math.round(counts.reduce((sum, count) => sum + count, 0) / Math.max(1, counts.length))))
