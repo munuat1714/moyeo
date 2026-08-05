@@ -340,6 +340,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .draggable-stop-card { cursor: grab; touch-action: none; user-select: none; }
 .draggable-stop-card:active { cursor: grabbing; }
 .draggable-stop-card:focus-visible { outline: 3px solid #8ebfff; outline-offset: 3px; }
+.travel-date-label { min-width: 0; max-width: 100%; overflow: hidden; }
+.travel-date-input {
+  display: block; box-sizing: border-box; inline-size: 100%; width: 100%; min-inline-size: 0; min-width: 0; max-inline-size: 100%; max-width: 100%;
+  -webkit-appearance: none; appearance: none;
+}
+.travel-date-input::-webkit-date-and-time-value { min-width: 0; margin: 0; text-align: left; }
+.travel-date-note { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 
 @media (max-width: 430px) {
   .simple-hero { padding-top: 48px; }

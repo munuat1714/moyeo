@@ -19,8 +19,17 @@ const TOUR_TYPES: Record<string, string> = {
 }
 
 const decodedServiceKey = (value: string) => { try { return decodeURIComponent(value) } catch { return value } }
-const itemsFrom = (data: any): Record<string, any>[] => {
-  const value = data?.response?.body?.items?.item ?? data?.getFoodKr?.item ?? data?.item ?? []
+export const itemsFrom = (data: any): Record<string, any>[] => {
+  const servicePayload = data && typeof data === 'object'
+    ? Object.entries(data).find(([key, value]) => key.startsWith('get') && value && typeof value === 'object')?.[1] as any
+    : undefined
+  const value = data?.response?.body?.items?.item
+    ?? servicePayload?.body?.items?.item
+    ?? servicePayload?.items?.item
+    ?? servicePayload?.item
+    ?? data?.items?.item
+    ?? data?.item
+    ?? []
   return Array.isArray(value) ? value : value ? [value] : []
 }
 const pick = (item: Record<string, any>, ...keys: string[]) => {
@@ -180,7 +189,7 @@ async function syncBusanExhibitions(db: D1Database, serviceKey: string) {
   })
   for (let index = 0; index < statements.length; index += 50) await db.batch(statements.slice(index, index + 50))
   await db.prepare("UPDATE public_events SET active=0 WHERE provider='BUSAN_EXHIBITION' AND synced_at < ?1").bind(now).run()
-  await markReady(db, 'BUSAN_EXHIBITION', statements.length, now)
+  await markReady(db, 'BUSAN_EXHIBITION', statements.length, now, statements.length ? 'ready' : 'empty')
 }
 
 function latestWeatherBase(now = new Date()) {
@@ -215,10 +224,10 @@ async function syncWeather(db: D1Database, serviceKey: string) {
   await markReady(db, 'KMA_FORECAST', statements.length, now)
 }
 
-async function markReady(db: D1Database, provider: string, count: number, now = Math.floor(Date.now() / 1000)) {
+async function markReady(db: D1Database, provider: string, count: number, now = Math.floor(Date.now() / 1000), status = 'ready') {
   await db.prepare(`INSERT INTO public_data_sync (provider,status,last_started_at,last_completed_at,item_count,error_message)
-    VALUES (?1,'ready',?2,?2,?3,NULL) ON CONFLICT(provider) DO UPDATE SET status='ready',last_completed_at=?2,item_count=?3,error_message=NULL`)
-    .bind(provider, now, count).run()
+    VALUES (?1,?4,?2,?2,?3,NULL) ON CONFLICT(provider) DO UPDATE SET status=?4,last_completed_at=?2,item_count=?3,error_message=NULL`)
+    .bind(provider, now, count, status).run()
 }
 
 export async function syncPublicData(env: PublicDataEnv, requestedProviders?: string[]) {

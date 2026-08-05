@@ -113,10 +113,10 @@ export default {
     }
 
     if (url.pathname === "/api/naver/config") {
-      return Response.json({
+      return secured(Response.json({
         enabled: Boolean(env.NAVER_MAPS_CLIENT_ID),
         clientId: env.NAVER_MAPS_CLIENT_ID ?? null,
-      }, { headers: { "Cache-Control": "public, max-age=3600" } });
+      }, { headers: { "Cache-Control": "public, max-age=3600" } }));
     }
 
     if (url.pathname === "/api/public-data/status" && request.method === "GET") {
@@ -132,9 +132,24 @@ export default {
       const providers = await publicDataStatus(env.DB) as any[];
       const unavailable = providers.filter((item) => item.status === 'failed' && Number(item.item_count) === 0).map((item) => item.provider);
       const stale = providers.filter((item) => item.status === 'stale').map((item) => item.provider);
-      const healthy = unavailable.length === 0;
-      return secured(Response.json({ status: healthy ? 'ok' : 'degraded', unavailable, stale }, {
-        status: healthy ? 200 : 503, headers: { 'Cache-Control': 'no-store' },
+      const empty = providers.filter((item) => item.status === 'empty').map((item) => item.provider);
+      const dataStatus = unavailable.length || stale.length || empty.length ? 'degraded' : 'ok';
+      return secured(Response.json({ status: 'ok', dataStatus, unavailable, stale, empty }, {
+        status: 200, headers: { 'Cache-Control': 'no-store' },
+      }));
+    }
+
+    if (url.pathname === "/api/data-health" && request.method === "GET") {
+      const providers = await publicDataStatus(env.DB) as any[];
+      const now = Math.floor(Date.now() / 1000);
+      const unavailable = providers.filter((item) => item.status === 'failed' && Number(item.item_count) === 0).map((item) => item.provider);
+      const stale = providers.filter((item) => item.status === 'stale').map((item) => item.provider);
+      const empty = providers.filter((item) => item.status === 'empty').map((item) => item.provider);
+      const overdue = providers.filter((item) => item.provider !== 'TOUR_DETAIL' && (!item.last_completed_at || now - Number(item.last_completed_at) > 72 * 60 * 60)).map((item) => item.provider);
+      const unavailableSet = [...new Set([...unavailable, ...overdue])];
+      const status = unavailableSet.length ? 'unavailable' : stale.length || empty.length ? 'degraded' : 'ok';
+      return secured(Response.json({ status, unavailable: unavailableSet, stale, empty, checkedAt: now }, {
+        status: unavailableSet.length ? 503 : 200, headers: { 'Cache-Control': 'no-store' },
       }));
     }
 
@@ -148,7 +163,7 @@ export default {
       if (limited) return secured(limited);
       const providers = url.searchParams.get("providers")?.split(",").map((value) => value.trim()).filter(Boolean);
       const result = await syncPublicData({ DB: env.DB, PUBLIC_DATA_SERVICE_KEY: env.PUBLIC_DATA_SERVICE_KEY }, providers);
-      return Response.json(result, { headers: { "Cache-Control": "no-store" } });
+      return secured(Response.json(result, { headers: { "Cache-Control": "no-store" } }));
     }
 
     if (url.pathname === "/api/naver/local") {
