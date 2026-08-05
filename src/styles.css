@@ -334,6 +334,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .live-code { font-size: 10px; }
 .map-fallback-note { line-height: 1.4; }
 .survey-actions button.selected { color: #fff; border-color: #75b5ff; background: var(--green); }
+.draggable-stop-card { cursor: grab; touch-action: none; user-select: none; }
+.draggable-stop-card:active { cursor: grabbing; }
+.draggable-stop-card:focus-visible { outline: 3px solid #8ebfff; outline-offset: 3px; }
 
 @media (max-width: 430px) {
   .simple-hero { padding-top: 48px; }
@@ -342,4 +345,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .concept-flow small { font-size: 12px; }
   .final-hero h2 { font-size: 27px; line-height: 1.25; }
   .route-map { height: 340px; }
+}
+
+@media (max-width: 600px) and (max-height: 620px) {
+  .wizard-actions { position: static; width: 100%; transform: none; margin-top: 24px; }
+  .create-wizard { padding-bottom: 28px; }
+  .location-results { max-height: min(220px, 38dvh); }
 }

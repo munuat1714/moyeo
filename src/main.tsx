@@ -3,21 +3,23 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
-  ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign,
+  ArrowLeft, ArrowRight, CalendarDays, Check, ChevronRight, CircleDollarSign,
   Clock3, Coffee, Compass, Copy, ExternalLink, Home, Map, MapPin, MessageCircle,
   RotateCcw, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, TrainFront, Trash2,
-  GripVertical, UserRound, UsersRound, Utensils, Vote, WalletCards, X,
+  UserRound, UsersRound, Utensils, Vote, WalletCards, X,
 } from 'lucide-react'
 import { courses, demoPreferences, foods, initialState, moods, themes } from './data'
 import { aggregateThemes, allPreferencesComplete, formatPrice, recommendCourses, reorderStops, tallyVotes } from './logic'
 import { clearRoomToken, createLiveRoom, deleteLiveRoom, fetchLiveItinerary, fetchLiveRecommendations, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLiveItinerary, saveLivePreference, saveRoomToken, startLiveRoomWithCurrentMembers, submitLiveVote } from './live'
 import type { LiveSnapshot } from './live'
 import type { AppState, Course, Preference, Stop } from './types'
+import 'pretendard/dist/web/variable/pretendardvariable.css'
 import './styles.css'
 
 const STORAGE_KEY = 'modu-trip-state-v1'
 const EVENT_KEY = 'modu-trip-anonymous-events-v1'
 const ATTRIBUTION_KEY = 'modu-trip-attribution-v1'
+const SESSION_EVENT_PREFIX = 'modu-trip-session-event:'
 
 type AnonymousEvent = { name: string; at: string }
 
@@ -39,9 +41,12 @@ function track(name: string) {
     }
     if (incoming.source || incoming.medium || incoming.campaign) sessionStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(incoming))
     const attribution = JSON.parse(sessionStorage.getItem(ATTRIBUTION_KEY) ?? '{}') as typeof incoming
+    const sessionKey = `${SESSION_EVENT_PREFIX}${name}`
+    const firstInSession = sessionStorage.getItem(sessionKey) !== '1'
+    if (firstInSession) sessionStorage.setItem(sessionKey, '1')
     void fetch('/api/events', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
-      body: JSON.stringify({ name, ...attribution }),
+      body: JSON.stringify({ name, ...attribution, firstInSession }),
     }).catch(() => undefined)
   } catch {
     // 체험은 분석 기록에 실패해도 계속 진행됩니다.
@@ -78,7 +83,7 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
   const selectedCourse = recommendedCourses.find((course) => course.id === selectedCourseId) ?? recommendedCourses[0]
 
   useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)), [state])
-  useEffect(() => { track('landing_view') }, [])
+  useEffect(() => { track(isDemo ? 'demo_view' : 'landing_view') }, [isDemo])
 
   const update = (patch: Partial<AppState>) => setState((current) => ({ ...current, ...patch }))
   const reset = () => {
@@ -100,7 +105,11 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
     <div className={`app-shell ${state.step === 'home' ? 'landing-mode' : ''}`}>
       <header className="app-header">
         {state.step !== 'home' ? (
-          <button className="icon-button" aria-label="뒤로 가기" onClick={() => state.step === 'create' && createStage > 1 ? setCreateStage((stage) => stage - 1) : update({ step: headerBack[state.step] ?? 'home' })}>
+          <button className="icon-button" aria-label="뒤로 가기" onClick={() => {
+            if (state.step === 'create' && createStage > 1) return setCreateStage((stage) => stage - 1)
+            if (isDemo && state.step === 'create') return window.location.assign('/')
+            update({ step: headerBack[state.step] ?? 'home' })
+          }}>
             <ArrowLeft size={21} />
           </button>
         ) : <div className="brand-mark" aria-label="모두의 여행">M</div>}
@@ -355,7 +364,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
         {allReady && routeCourses && !finalCourse && <section className="live-section"><div className="section-heading"><h2>{snapshot.room.voteRound === 2 ? '공동 1위 결선투표' : '우리 경로에 맞는 코스 3가지'}</h2><p>{snapshot.room.voteRound === 2 ? '동률인 코스 중 하나를 다시 골라 주세요.' : recommendationSummary}</p></div><div className="live-course-list">{availableCourses.map((course) => <div key={course.id}><CourseCard course={course} expanded={expandedCourseId === course.id} onToggle={() => setExpandedCourseId((current) => current === course.id ? '' : course.id)} />{!snapshot.hasVoted && <button className={`live-vote-choice ${selectedCourseId === course.id ? 'selected' : ''}`} onClick={() => setSelectedCourseId(course.id)}>{selectedCourseId === course.id && <Check size={15} />} {soloTrip ? '이 코스 선택' : '이 코스에 투표'}</button>}</div>)}</div>{snapshot.hasVoted && !snapshot.allVoted && <div className="lock-note"><Vote size={18} /><div><b>내 투표를 저장했어요</b><span>모두 투표할 때까지 선택은 공개되지 않습니다.</span></div></div>}{!snapshot.hasVoted && <button className="primary-button sticky-action" disabled={!selectedCourseId || working} onClick={vote}>{soloTrip ? '투표하기' : '익명 투표 보내기'} <Vote size={18} /></button>}{snapshot.allVoted && <><div className="result-list">{availableCourses.map((course) => <div key={course.id}><span>{course.emoji}</span><div><b>{course.title}</b><div className="vote-bar"><i style={{ width: `${((voteCounts[course.id] ?? 0) / snapshot.members.length) * 100}%` }} /></div></div><strong>{voteCounts[course.id] ?? 0}표</strong></div>)}</div><button className="primary-button sticky-action" disabled={working} onClick={resolve}>{snapshot.room.voteRound === 1 ? '결과 확인하기' : '최종 코스 확정하기'} <ArrowRight size={18} /></button></>}</section>}
 
         {finalCourse && !showFinalRoute && <section className="live-section"><button className="confirmed-route-card" onClick={() => setShowFinalRoute(true)}><span className="result-icon"><Check /></span><span><small>취향 분석과 투표가 끝났어요</small><b>확정된 경로 보기</b><em>{finalCourse.title} · 취향 일치 {finalCourse.match}%</em></span><ArrowRight size={20} /></button></section>}
-        {finalCourse && showFinalRoute && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 당일치기 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.startDate} · {snapshot.members.length}명 · 취향 일치 {finalCourse.match}%</p></div><div className="final-route-heading"><Map size={16} /><b>최종 경로</b></div><RouteMap stops={(itinerary ?? finalCourse.days)[finalDay]} />{(itinerary ?? finalCourse.days).length > 1 ? <div className="day-switch">{(itinerary ?? finalCourse.days).map((_, index) => <button key={index} className={finalDay === index ? 'active' : ''} onClick={() => { setFinalDay(index); setEditingStop(null) }}>DAY {index + 1}</button>)}</div> : <div className="single-day-label"><CalendarDays size={15} /> 당일 일정</div>}{requester?.host && <div className="route-edit-notice"><Sparkles size={15} /><span>화살표로 순서를 바꾸거나 `장소 변경`으로 실제 장소를 검색할 수 있어요.{itinerarySaving ? ' 저장 중…' : ''}</span></div>}<Timeline stops={(itinerary ?? finalCourse.days)[finalDay]} onMove={requester?.host ? (index, direction) => moveStop(finalDay, index, direction) : undefined} onEdit={requester?.host ? (index) => setEditingStop({ day: finalDay, index }) : undefined} disabled={itinerarySaving} renderAfter={(index) => editingStop?.day === finalDay && editingStop.index === index ? <RoutePlaceEditor current={(itinerary ?? finalCourse.days)[finalDay][index]} onCancel={() => setEditingStop(null)} onSelect={replaceStop} /> : null} /></section>}
+        {finalCourse && showFinalRoute && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 당일치기 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.startDate} · {snapshot.members.length}명 · 취향 일치 {finalCourse.match}%</p></div><div className="final-route-heading"><Map size={16} /><b>최종 경로</b></div><RouteMap stops={(itinerary ?? finalCourse.days)[finalDay]} />{(itinerary ?? finalCourse.days).length > 1 ? <div className="day-switch">{(itinerary ?? finalCourse.days).map((_, index) => <button key={index} className={finalDay === index ? 'active' : ''} onClick={() => { setFinalDay(index); setEditingStop(null) }}>DAY {index + 1}</button>)}</div> : <div className="single-day-label"><CalendarDays size={15} /> 당일 일정</div>}{requester?.host && <div className="route-edit-notice"><Sparkles size={15} /><span>장소 카드를 끌어 순서를 바꾸거나 `장소 변경`으로 실제 장소를 검색할 수 있어요.{itinerarySaving ? ' 저장 중…' : ''}</span></div>}<Timeline stops={(itinerary ?? finalCourse.days)[finalDay]} onMove={requester?.host ? (index, direction) => moveStop(finalDay, index, direction) : undefined} onEdit={requester?.host ? (index) => setEditingStop({ day: finalDay, index }) : undefined} disabled={itinerarySaving} renderAfter={(index) => editingStop?.day === finalDay && editingStop.index === index ? <RoutePlaceEditor current={(itinerary ?? finalCourse.days)[finalDay][index]} onCancel={() => setEditingStop(null)} onSelect={replaceStop} /> : null} /></section>}
         {finalCourse && <div className="final-room-controls">{roomControls}</div>}
       </>}
     </main>
@@ -379,6 +388,7 @@ function HomeScreen() {
         <span className="eyebrow"><Sparkles size={14} /> 친구 취향으로 완성하는 여행</span>
         <h1>여행 계획,<br /><em>모두의 취향</em>에서 시작해요.</h1>
         <p>각자 가고 싶은 곳과 여행 스타일을 고르면, 친구 모두가 만족할 코스를 정리하고 투표로 결정하는 여행 계획 서비스입니다.</p>
+        <a className="hero-demo-link" href="/demo" onClick={() => track('landing_demo_click')}>개인정보 없이 부산 여행 만들어보기 <ArrowRight size={18} /></a>
         <div className="concept-flow" aria-label="모두의 여행 이용 개요">
           <article><span><UsersRound size={20} /></span><div><b>취향을 모으고</b><small>맛집·카페·사진·문화 등 각자의 선택</small></div></article>
           <i><ArrowRight size={17} /></i>
@@ -386,16 +396,15 @@ function HomeScreen() {
           <i><ArrowRight size={17} /></i>
           <article><span><Vote size={20} /></span><div><b>함께 결정해요</b><small>눈치 보지 않는 투표로 최종 선택</small></div></article>
         </div>
-        <a className="hero-demo-link" href="/demo" onClick={() => track('landing_demo_click')}>개인정보 없이 부산 여행 만들어보기 <ArrowRight size={18} /></a>
       </section>
 
       <section className="interest-survey" aria-labelledby="interest-title">
-        <div><span>한 가지만 알려주세요</span><h2 id="interest-title">이런 서비스가 있다면 사용해보고 싶나요?</h2><p>개인정보나 연락처는 받지 않습니다. 선택한 답변은 이 브라우저에만 저장됩니다.</p></div>
+        <div><span>한 가지만 알려주세요</span><h2 id="interest-title">이런 서비스가 있다면 사용해보고 싶나요?</h2><p>이름이나 연락처는 수집하지 않으며, 선택 결과는 익명 통계로만 집계됩니다.</p></div>
         <div className="survey-actions">
           <button aria-pressed={interest === 'yes'} className={interest === 'yes' ? 'selected' : ''} onClick={() => answer('yes')}><Check size={18} /> 네, 사용해보고 싶어요</button>
           <button aria-pressed={interest === 'not-yet'} className={interest === 'not-yet' ? 'selected' : ''} onClick={() => answer('not-yet')}><CircleDollarSign size={18} /> 아직은 잘 모르겠어요</button>
         </div>
-        {interest && <div className="survey-thanks" role="status"><Check size={16} /><span>답변해주셔서 고마워요. 개인정보는 전송되지 않았습니다.</span></div>}
+        {interest && <div className="survey-thanks" role="status"><Check size={16} /><span>답변해주셔서 고마워요. 개인을 식별하지 않는 합계로만 반영됩니다.</span></div>}
       </section>
 
       <footer className="simple-footer"><div><span className="brand-mark">M</span><b>모두의 여행</b></div><p>친구들의 취향을 모아 완성하는 여행 계획 서비스</p><small>© 2026 모두의 여행 팀</small></footer>
@@ -814,7 +823,7 @@ function FinalTrip({ courses, state, setState, tab, setTab }: { courses: Course[
           <span className="eyebrow dark"><Sparkles size={14} /> 다음 단계에 함께해요</span>
           <h3>모두의 여행을 더 먼저 만나보세요.</h3><p>연락처를 받지 않고 관심 의사만 확인합니다. 정식 모집 링크가 준비되면 이 화면에 연결할 예정이에요.</p>
           <div className="interest-actions"><button onClick={() => chooseInterest('beta')}><ExternalLink size={17} /> 베타 참여에 관심 있어요</button><button onClick={() => chooseInterest('interview')}><MessageCircle size={17} /> 15분 인터뷰에 관심 있어요</button></div>
-          {interest && <div className="interest-confirm"><Check size={16} /><span>{interest === 'beta' ? '베타 참여' : '인터뷰 참여'} 관심을 표시했어요. 개인정보는 전송되지 않았습니다.</span></div>}
+          {interest && <div className="interest-confirm"><Check size={16} /><span>{interest === 'beta' ? '베타 참여' : '인터뷰 참여'} 관심을 익명 합계에 반영했어요.</span></div>}
           <small><ShieldCheck size={14} /> 여행 정보와 응답은 현재 사용 중인 브라우저에만 저장됩니다.</small>
         </section>
       </div>
@@ -825,17 +834,34 @@ function FinalTrip({ courses, state, setState, tab, setTab }: { courses: Course[
 function Timeline({ stops, onRemove, onMove, onEdit, disabled, renderAfter }: { stops: Stop[]; onRemove?: (index: number) => void; onMove?: (index: number, direction: number) => void; onEdit?: (index: number) => void; disabled?: boolean; renderAfter?: (index: number) => React.ReactNode }) {
   const [dragSource, setDragSource] = useState<number | null>(null)
   const [dragTarget, setDragTarget] = useState<number | null>(null)
-  useEffect(() => { setDragSource(null); setDragTarget(null) }, [stops])
+  const dragSourceRef = useRef<number | null>(null)
+  const dragTargetRef = useRef<number | null>(null)
+  useEffect(() => { dragSourceRef.current = null; dragTargetRef.current = null; setDragSource(null); setDragTarget(null) }, [stops])
   const finishDrag = () => {
-    if (dragSource !== null && dragTarget !== null && dragSource !== dragTarget) onMove?.(dragSource, dragTarget - dragSource)
+    const source = dragSourceRef.current, target = dragTargetRef.current
+    if (source !== null && target !== null && source !== target) onMove?.(source, target - source)
+    dragSourceRef.current = null; dragTargetRef.current = null
     setDragSource(null); setDragTarget(null)
   }
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>, index: number) => {
+    if (disabled || !onMove || event.button !== 0 || (event.target as HTMLElement).closest('button,a,input')) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragSourceRef.current = index; dragTargetRef.current = index
+    setDragSource(index); setDragTarget(index)
+  }
+  const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (dragSourceRef.current === null) return
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-stop-index]')
+    if (!target) return
+    const index = Number(target.dataset.stopIndex)
+    dragTargetRef.current = index; setDragTarget(index)
+  }
   if (stops.length === 0) return <div className="empty-schedule"><CalendarDays size={22} /><b>이 날짜의 일정이 비었어요.</b><span>처음부터 다시 시작하면 원래 추천 일정을 불러올 수 있어요.</span></div>
-  return <div className="timeline">{onMove && <div className="drag-move-guide"><GripVertical size={16} /><span><b>손잡이를 끌어서 순서를 바꿔보세요</b><small>장소 오른쪽의 이동 손잡이를 원하는 위치까지 드래그하세요.</small></span></div>}{stops.map((stop, index) => {
+  return <div className="timeline">{onMove && <div className="drag-move-guide"><span><b>장소 카드를 끌어서 순서를 바꿔보세요</b><small>카드의 빈 곳을 누른 채 원하는 위치까지 이동하세요.</small></span></div>}{stops.map((stop, index) => {
     const after = renderAfter?.(index)
     const dragging = dragSource === index
     const dragOver = dragSource !== null && dragTarget === index && !dragging
-    return <React.Fragment key={`${stop.time}-${stop.title}-${index}`}><div data-stop-index={index} className={`timeline-stop ${dragging ? 'dragging' : ''} ${dragOver ? 'drag-over' : ''}`}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className="stop-card"><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onMove && <><button disabled={disabled || index === 0} aria-label={`${stop.title} 위로 이동`} onClick={() => onMove(index, -1)}><ChevronUp size={14} /></button><button disabled={disabled || index === stops.length - 1} aria-label={`${stop.title} 아래로 이동`} onClick={() => onMove(index, 1)}><ChevronDown size={14} /></button><button type="button" className="drag-handle" disabled={disabled} aria-label={`${stop.title} 드래그해서 순서 이동`} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setDragSource(index); setDragTarget(index) }} onPointerMove={(event) => { if (dragSource === null) return; const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-stop-index]'); if (target) setDragTarget(Number(target.dataset.stopIndex)) }} onPointerUp={finishDrag} onPointerCancel={() => { setDragSource(null); setDragTarget(null) }}><GripVertical size={16} /></button></>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><b>{stop.title}</b><p>{stop.description}</p>{onEdit && <button className="replace-place-button" disabled={disabled} onClick={() => onEdit(index)}><MapPin size={13} /> 장소 변경</button>}<div className="stop-footer"><small>{stop.source ?? '운영자 검수'}{stop.verifiedAt ? ` · ${stop.verifiedAt} 확인` : ''}</small></div><PlaceLookup stop={stop} /></div></div>{after && <div className="inline-route-editor">{after}</div>}</React.Fragment>
+    return <React.Fragment key={`${stop.time}-${stop.title}-${index}`}><div data-stop-index={index} className={`timeline-stop ${dragging ? 'dragging' : ''} ${dragOver ? 'drag-over' : ''}`}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className={`stop-card ${onMove ? 'draggable-stop-card' : ''}`} tabIndex={onMove ? 0 : undefined} aria-roledescription={onMove ? '순서를 바꿀 수 있는 장소 카드' : undefined} onPointerDown={(event) => startDrag(event, index)} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} onKeyDown={(event) => { if (!onMove || disabled || !event.altKey) return; if (event.key === 'ArrowUp' && index > 0) { event.preventDefault(); onMove(index, -1) } if (event.key === 'ArrowDown' && index < stops.length - 1) { event.preventDefault(); onMove(index, 1) } }}><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><b>{stop.title}</b><p>{stop.description}</p>{onEdit && <button className="replace-place-button" disabled={disabled} onClick={() => onEdit(index)}><MapPin size={13} /> 장소 변경</button>}<div className="stop-footer"><small>{stop.source ?? '운영자 검수'}{stop.verifiedAt ? ` · ${stop.verifiedAt} 확인` : ''}</small></div><PlaceLookup stop={stop} /></div></div>{after && <div className="inline-route-editor">{after}</div>}</React.Fragment>
   })}</div>
 }
 

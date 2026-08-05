@@ -51,22 +51,22 @@ export default {
 
     if (url.pathname === "/api/events" && request.method === "POST") {
       const allowed = new Set([
-        "landing_view", "landing_interest_yes", "landing_interest_not_yet", "landing_demo_click",
+        "landing_view", "demo_view", "landing_interest_yes", "landing_interest_not_yet", "landing_demo_click",
         "room_created", "recommendations_viewed", "final_route_confirmed", "schedule_edit", "schedule_copy",
         "feedback_helpful", "feedback_not_helpful", "beta_interest", "interview_interest",
       ]);
       try {
-        const body = await request.json<{ name?: string; source?: string; medium?: string; campaign?: string }>();
+        const body = await request.json<{ name?: string; source?: string; medium?: string; campaign?: string; firstInSession?: boolean }>();
         if (!body.name || !allowed.has(body.name)) return Response.json({ error: "허용되지 않은 이벤트입니다." }, { status: 400 });
         const clean = (value?: string) => String(value ?? "").replace(/[^\p{L}\p{N}_.-]/gu, "").slice(0, 80);
-        const day = new Date().toISOString().slice(0, 10);
+        const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
         const now = Math.floor(Date.now() / 1000);
         await env.DB.prepare(`INSERT INTO anonymous_event_counts
-          (event_date,event_name,campaign_source,campaign_medium,campaign_name,event_count,updated_at)
-          VALUES (?1,?2,?3,?4,?5,1,?6)
+          (event_date,event_name,campaign_source,campaign_medium,campaign_name,event_count,session_count,updated_at)
+          VALUES (?1,?2,?3,?4,?5,1,?6,?7)
           ON CONFLICT(event_date,event_name,campaign_source,campaign_medium,campaign_name)
-          DO UPDATE SET event_count=event_count+1,updated_at=excluded.updated_at`)
-          .bind(day, body.name, clean(body.source), clean(body.medium), clean(body.campaign), now).run();
+          DO UPDATE SET event_count=event_count+1,session_count=session_count+excluded.session_count,updated_at=excluded.updated_at`)
+          .bind(day, body.name, clean(body.source), clean(body.medium), clean(body.campaign), body.firstInSession ? 1 : 0, now).run();
         return Response.json({ ok: true }, { status: 202, headers: { "Cache-Control": "no-store" } });
       } catch {
         return Response.json({ error: "이벤트 형식을 확인해 주세요." }, { status: 400 });
@@ -142,7 +142,7 @@ export default {
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(Promise.all([
       deleteExpiredRooms(env.DB),
-      env.DB.prepare("DELETE FROM anonymous_event_counts WHERE event_date < date('now','-180 days')").run(),
+      env.DB.prepare("DELETE FROM anonymous_event_counts WHERE event_date < date('now','+9 hours','-180 days')").run(),
       syncPublicData({ DB: env.DB, PUBLIC_DATA_SERVICE_KEY: env.PUBLIC_DATA_SERVICE_KEY }),
     ]));
   },
