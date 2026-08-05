@@ -73,8 +73,9 @@ export default {
       const limited = await rateLimitResponse(env.DB, 'events:global', 5000, 3600);
       if (limited) return secured(limited);
       const allowed = new Set([
-        "landing_view", "demo_view", "landing_interest_yes", "landing_interest_not_yet", "landing_demo_click",
+        "landing_view", "app_view", "demo_view", "landing_interest_yes", "landing_interest_not_yet", "landing_app_click", "landing_demo_click",
         "room_created", "recommendations_viewed", "final_route_confirmed", "schedule_edit", "schedule_copy",
+        "demo_room_created", "demo_recommendations_viewed", "demo_final_route_confirmed",
         "feedback_helpful", "feedback_not_helpful", "beta_interest", "interview_interest",
       ]);
       try {
