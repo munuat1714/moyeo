@@ -15,6 +15,7 @@ import type { LiveSnapshot } from './live'
 import type { AppState, Course, Preference, Stop } from './types'
 import { forgetRoom, isNativeApp, notificationsEnabled, recentRooms, rememberRoom, scheduleTripNotifications, setNotificationsEnabled, shareInvite } from './mobile'
 import type { RecentRoom } from './mobile'
+import { apiUrl } from './runtime'
 import 'pretendard/dist/web/variable/pretendardvariable.css'
 import './styles.css'
 
@@ -46,7 +47,7 @@ function track(name: string) {
     const sessionKey = `${SESSION_EVENT_PREFIX}${name}`
     const firstInSession = sessionStorage.getItem(sessionKey) !== '1'
     if (firstInSession) sessionStorage.setItem(sessionKey, '1')
-    void fetch('/api/events', {
+    void fetch(apiUrl('/api/events'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
       body: JSON.stringify({ name, ...attribution, firstInSession }),
     }).catch(() => undefined)
@@ -660,7 +661,9 @@ function LocationSearchField({ label, placeholder, value, onChange, selected, on
     const timer = window.setTimeout(async () => {
       setLoading(true); setMessage('')
       try {
-        const response = await fetch(`/api/naver/local?query=${encodeURIComponent(`부산 ${value.trim()}`)}`, { signal: controller.signal })
+        const response = await fetch(apiUrl(`/api/naver/local?query=${encodeURIComponent(`부산 ${value.trim()}`)}`), {
+          signal: controller.signal, cache: 'no-store', headers: { Accept: 'application/json' },
+        })
         const data = await response.json() as { items?: LocationSuggestion[]; error?: string }
         if (!response.ok) throw new Error(data.error ?? '장소를 검색하지 못했습니다.')
         setItems(data.items ?? [])
@@ -708,7 +711,9 @@ function RoutePlaceEditor({ current, onSelect, onCancel }: { current: Stop; onSe
     const timer = window.setTimeout(async () => {
       setLoading(true); setMessage('')
       try {
-        const response = await fetch(`/api/naver/local?query=${encodeURIComponent(`부산 ${query.trim()}`)}`, { signal: controller.signal })
+        const response = await fetch(apiUrl(`/api/naver/local?query=${encodeURIComponent(`부산 ${query.trim()}`)}`), {
+          signal: controller.signal, cache: 'no-store', headers: { Accept: 'application/json' },
+        })
         const data = await response.json() as { items?: LocationSuggestion[]; error?: string }
         if (!response.ok) throw new Error(data.error ?? '장소를 검색하지 못했습니다.')
         const valid = (data.items ?? []).filter((item) => item.mapx && item.mapy)
@@ -1003,7 +1008,7 @@ function RouteMap({ stops }: { stops: Stop[] }) {
     if (!container.current || points.length === 0) return
     const initialize = async () => {
       try {
-        const config = await fetch('/api/naver/config').then((response) => response.json()) as { enabled: boolean; clientId?: string }
+        const config = await fetch(apiUrl('/api/naver/config')).then((response) => response.json()) as { enabled: boolean; clientId?: string }
         if (!config.enabled || !config.clientId) throw new Error('not-configured')
         const load = () => new Promise<void>((resolve, reject) => {
           if ((window as any).naver?.maps) return resolve()
@@ -1045,7 +1050,7 @@ function PlaceLookup({ stop }: { stop: Stop }) {
       })
       if (Number.isFinite(stop.latitude)) params.set('lat', String(stop.latitude))
       if (Number.isFinite(stop.longitude)) params.set('lng', String(stop.longitude))
-      const response = await fetch(`/api/naver/local?${params}`)
+      const response = await fetch(apiUrl(`/api/naver/local?${params}`))
       if (!response.ok) throw new Error('lookup-failed')
       const data = await response.json() as { items?: Array<{ title: string; roadAddress?: string; link?: string }> }
       setResult(data.items?.[0] ?? null)

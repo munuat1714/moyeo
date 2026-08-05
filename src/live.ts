@@ -1,4 +1,5 @@
 import type { Course, Member, Preference, Stop, Trip } from './types'
+import { apiUrl } from './runtime'
 
 export type LiveRoom = Trip & {
   id: string
@@ -42,7 +43,7 @@ async function request<T>(path: string, init: RequestInit = {}, roomId?: string)
     const token = getRoomToken(roomId)
     if (token) headers.set('X-Moyeo-Member-Token', token)
   }
-  const response = await fetch(path, { ...init, headers })
+  const response = await fetch(apiUrl(path), { ...init, headers })
   const data = await response.json() as T & { error?: string }
   if (!response.ok) throw new Error(data.error ?? '요청을 처리하지 못했습니다.')
   return data

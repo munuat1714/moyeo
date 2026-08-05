@@ -131,7 +131,7 @@ async function writeSearchCache(db: SearchCache | undefined, cacheKey: string, p
 }
 
 async function search(query: string, keyword: string, credentials: SearchCredentials, display = 5, db?: SearchCache) {
-  const cacheKey = `naver:local:v1:${display}:${normalizeSearchQuery(query)}`
+  const cacheKey = `naver:local:v2:${display}:${normalizeSearchQuery(query)}`
   const cached = await readSearchCache(db, cacheKey)
   if (cached) return cached.map((place) => ({ ...place, keyword }))
   let data: { items?: Array<Record<string, unknown>> } | null = null
@@ -139,7 +139,7 @@ async function search(query: string, keyword: string, credentials: SearchCredent
     const endpoint = new URL('https://openapi.naver.com/v1/search/local.json')
     endpoint.searchParams.set('query', query)
     endpoint.searchParams.set('display', String(display))
-    endpoint.searchParams.set('sort', 'comment')
+    endpoint.searchParams.set('sort', 'random')
     const response = await fetch(endpoint, { headers: {
       'X-Naver-Client-Id': credentials.clientId ?? '',
       'X-Naver-Client-Secret': credentials.clientSecret ?? '',

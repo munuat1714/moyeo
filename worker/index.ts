@@ -169,7 +169,7 @@ export default {
     if (url.pathname === "/api/naver/local") {
       if (request.method !== "GET") return new Response("Method Not Allowed", { status: 405 });
       const query = url.searchParams.get("query")?.trim();
-      const expectedTitle = url.searchParams.get("title")?.trim() || query;
+      const expectedTitle = url.searchParams.get("title")?.trim();
       const latitude = Number(url.searchParams.get("lat"));
       const longitude = Number(url.searchParams.get("lng"));
       if (!query || query.length > 80) return Response.json({ error: "검색어를 확인해 주세요." }, { status: 400 });
@@ -183,8 +183,13 @@ export default {
           clientId: env.NAVER_SEARCH_CLIENT_ID,
           clientSecret: env.NAVER_SEARCH_CLIENT_SECRET,
         }, env.DB);
-        const best = selectBestPlaceMatch(items, { title: expectedTitle, latitude, longitude });
-        return Response.json({ items: (best ? [best] : []).map((item) => ({
+        const selectedItems = expectedTitle
+          ? (() => {
+              const best = selectBestPlaceMatch(items, { title: expectedTitle, latitude, longitude });
+              return best ? [best] : [];
+            })()
+          : items;
+        return Response.json({ items: selectedItems.map((item) => ({
           title: item.title,
           category: item.category,
           roadAddress: item.roadAddress,
