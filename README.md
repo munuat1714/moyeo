@@ -62,6 +62,7 @@ Cloudflare 대시보드에서는 `moyeo` Worker의 **Settings → Variables and 
 
 ```text
 PUBLIC_DATA_SERVICE_KEY      # Secret, 공공데이터포털 일반 인증키
+PUBLIC_DATA_SYNC_TOKEN       # Secret, 관리자용 수동 동기화 요청 토큰
 ```
 
 한국관광공사 관광·문화·공연·액티비티·쇼핑·음식 데이터와 부산시 추천 맛집·모범음식점은 매일 Cron에서 D1으로 동기화됩니다. 국가유산청 부산 지정유산은 별도 키 없이 함께 동기화됩니다. 상태는 배포 후 `/api/public-data/status`에서 확인합니다. 데이터가 아직 없거나 외부 API가 실패해도 마지막 저장 데이터와 검수 장소로 추천 흐름을 유지합니다. 위생등급 파일 데이터는 안정적인 좌표 API가 없어 현재 자동 추천 원천에서는 제외하고, 향후 주소 정규화 작업 후 인증 배지로 병합합니다.

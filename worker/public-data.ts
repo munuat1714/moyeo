@@ -28,12 +28,19 @@ const pick = (item: Record<string, any>, ...keys: string[]) => {
 const clean = (value: unknown) => String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/\s+/g, ' ').trim()
 
 async function fetchJson(url: URL) {
-  const response = await fetch(url, { headers: { Accept: 'application/json' } })
-  if (!response.ok) throw new Error(`${url.pathname}: ${response.status}`)
-  const data = await response.json<any>()
-  const code = data?.response?.header?.resultCode
-  if (code && code !== '00' && code !== '0000') throw new Error(`${url.pathname}: ${code} ${data.response.header.resultMsg ?? ''}`)
-  return data
+  const retryable = new Set([408, 429, 500, 502, 503, 504, 520, 522, 524])
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(url, { headers: { Accept: 'application/json' } })
+    if (response.ok) {
+      const data = await response.json<any>()
+      const code = data?.response?.header?.resultCode
+      if (code && code !== '00' && code !== '0000') throw new Error(`${url.pathname}: ${code} ${data.response.header.resultMsg ?? ''}`)
+      return data
+    }
+    if (!retryable.has(response.status) || attempt === 2) throw new Error(`${url.pathname}: ${response.status}`)
+    await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt + Math.floor(Math.random() * 250)))
+  }
+  throw new Error(`${url.pathname}: retry exhausted`)
 }
 
 const publicUrl = (path: string, serviceKey: string) => {
@@ -212,7 +219,7 @@ async function markReady(db: D1Database, provider: string, count: number, now = 
     .bind(provider, now, count).run()
 }
 
-export async function syncPublicData(env: PublicDataEnv) {
+export async function syncPublicData(env: PublicDataEnv, requestedProviders?: string[]) {
   if (!env.PUBLIC_DATA_SERVICE_KEY) return { enabled: false, synced: [] }
   const key = env.PUBLIC_DATA_SERVICE_KEY, synced: string[] = []
   const tasks: Array<{ id: string; run: () => Promise<void> }> = [
@@ -223,7 +230,8 @@ export async function syncPublicData(env: PublicDataEnv) {
     { id: 'BUSAN_EXHIBITION', run: () => syncBusanExhibitions(env.DB, key) },
     { id: 'KMA_FORECAST', run: () => syncWeather(env.DB, key) },
   ]
-  for (const task of tasks) {
+  const requested = requestedProviders?.length ? new Set(requestedProviders) : null
+  for (const task of tasks.filter((item) => !requested || requested.has(item.id))) {
     const now = Math.floor(Date.now() / 1000)
     await env.DB.prepare(`INSERT INTO public_data_sync (provider,status,last_started_at,item_count) VALUES (?1,'syncing',?2,0)
       ON CONFLICT(provider) DO UPDATE SET status='syncing',last_started_at=?2,error_message=NULL`).bind(task.id, now).run()
@@ -231,7 +239,8 @@ export async function syncPublicData(env: PublicDataEnv) {
     catch (reason) {
       const message = reason instanceof Error ? reason.message : String(reason)
       console.error('public-data-sync-failed', { provider: task.id, message })
-      await env.DB.prepare("UPDATE public_data_sync SET status='failed',error_message=?1 WHERE provider=?2").bind(message.slice(0, 500), task.id).run()
+      await env.DB.prepare("UPDATE public_data_sync SET status=CASE WHEN item_count>0 THEN 'stale' ELSE 'failed' END,error_message=?1 WHERE provider=?2")
+        .bind(message.slice(0, 500), task.id).run()
     }
   }
   return { enabled: true, synced }

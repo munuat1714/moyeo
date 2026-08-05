@@ -28,6 +28,7 @@ interface Env {
   NAVER_SEARCH_CLIENT_ID?: string;
   NAVER_SEARCH_CLIENT_SECRET?: string;
   PUBLIC_DATA_SERVICE_KEY?: string;
+  PUBLIC_DATA_SYNC_TOKEN?: string;
   ANALYTICS_VIEW_TOKEN?: string;
 }
 
@@ -92,6 +93,17 @@ export default {
       return Response.json({ enabled: Boolean(env.PUBLIC_DATA_SERVICE_KEY), providers: await publicDataStatus(env.DB) }, {
         headers: { "Cache-Control": "public, max-age=300" },
       });
+    }
+
+    if (url.pathname === "/api/public-data/sync") {
+      if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+      const token = request.headers.get("X-Sync-Token");
+      if (!env.PUBLIC_DATA_SYNC_TOKEN || token !== env.PUBLIC_DATA_SYNC_TOKEN) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      const providers = url.searchParams.get("providers")?.split(",").map((value) => value.trim()).filter(Boolean);
+      const result = await syncPublicData({ DB: env.DB, PUBLIC_DATA_SERVICE_KEY: env.PUBLIC_DATA_SERVICE_KEY }, providers);
+      return Response.json(result, { headers: { "Cache-Control": "no-store" } });
     }
 
     if (url.pathname === "/api/naver/local") {
