@@ -484,7 +484,7 @@ function CreateTrip({ state, setState, stage, setStage }: { state: AppState; set
         <div className="section-heading"><h2>여행방 정보를 알려주세요</h2><p>친구들이 알아보기 쉬운 이름과 여행 날짜를 정해 주세요.</p></div>
         <div className="form-card">
           <label>여행방 이름<input value={state.trip.name} onChange={(event) => setTrip('name', event.target.value)} placeholder="예: 우리들의 부산 여행" /></label>
-          <label>여행 날짜<input type="date" value={state.trip.startDate} onChange={(event) => { setTrip('startDate', event.target.value); setTrip('endDate', event.target.value) }} /></label>
+          <label>여행 날짜<input className="travel-date-input" type="date" value={state.trip.startDate} onChange={(event) => { setTrip('startDate', event.target.value); setTrip('endDate', event.target.value) }} /></label>
           <label>내 별명<input maxLength={20} value={hostName} onChange={(event) => setHostName(event.target.value)} placeholder="예: 민지" /></label>
           <label>함께 갈 인원
             <div className="segmented member-count">{[1, 2, 3, 4, 5, 6].map((count) => <button type="button" className={expectedMembers === count ? 'active' : ''} onClick={() => setExpectedMembers(count)} key={count}>{count}명</button>)}</div>
