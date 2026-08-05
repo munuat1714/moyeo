@@ -4,6 +4,7 @@ export type PublicPlace = {
   provider: string; sourceId: string; title: string; category: string; address: string
   latitude: number; longitude: number; telephone: string; imageUrl: string; sourceUrl: string
   officialTags: string[]; sourceModifiedAt?: string
+  eventStartDate?: string; eventEndDate?: string
 }
 
 const TOUR_TYPES: Record<string, string> = {
@@ -38,7 +39,7 @@ const publicUrl = (path: string, serviceKey: string) => {
 
 async function tourPlaces(serviceKey: string) {
   const results: PublicPlace[] = []
-  for (const [contentTypeId, category] of Object.entries(TOUR_TYPES)) {
+  for (const [contentTypeId, category] of Object.entries(TOUR_TYPES).filter(([id]) => id !== '15')) {
     const url = publicUrl('/B551011/KorService2/areaBasedList2', serviceKey)
     Object.entries({ MobileOS: 'ETC', MobileApp: 'Moyeo', _type: 'json', areaCode: '6', contentTypeId, numOfRows: '1000', pageNo: '1' })
       .forEach(([key, value]) => url.searchParams.set(key, value))
@@ -53,6 +54,24 @@ async function tourPlaces(serviceKey: string) {
         officialTags: ['한국관광공사 관광정보'], sourceModifiedAt: String(item.modifiedtime ?? ''),
       })
     }
+  }
+  const kst = new Date(Date.now() + 9 * 3600_000)
+  const today = `${kst.getUTCFullYear()}${String(kst.getUTCMonth() + 1).padStart(2, '0')}${String(kst.getUTCDate()).padStart(2, '0')}`
+  const festivalUrl = publicUrl('/B551011/KorService2/searchFestival2', serviceKey)
+  Object.entries({ MobileOS: 'ETC', MobileApp: 'Moyeo', _type: 'json', areaCode: '6', eventStartDate: today, numOfRows: '1000', pageNo: '1', arrange: 'A' })
+    .forEach(([key, value]) => festivalUrl.searchParams.set(key, value))
+  for (const item of itemsFrom(await fetchJson(festivalUrl))) {
+    const latitude = Number(item.mapy), longitude = Number(item.mapx)
+    const eventStartDate = String(item.eventstartdate ?? ''), eventEndDate = String(item.eventenddate ?? '')
+    if (!item.contentid || !item.title || !Number.isFinite(latitude) || !Number.isFinite(longitude)
+      || !String(item.addr1 ?? '').includes('부산') || !eventStartDate || !eventEndDate || eventEndDate < today) continue
+    results.push({
+      provider: 'TOUR_API', sourceId: String(item.contentid), title: String(item.title), category: '공연·축제',
+      address: [item.addr1, item.addr2].filter(Boolean).join(' '), latitude, longitude,
+      telephone: String(item.tel ?? ''), imageUrl: String(item.firstimage ?? ''),
+      sourceUrl: `https://korean.visitkorea.or.kr/detail/ms_detail.do?cotid=${encodeURIComponent(String(item.contentid))}`,
+      officialTags: ['한국관광공사 행사정보'], sourceModifiedAt: String(item.modifiedtime ?? ''), eventStartDate, eventEndDate,
+    })
   }
   return results
 }
@@ -89,13 +108,15 @@ async function modelRestaurantPlaces(serviceKey: string) {
 async function savePlaces(db: D1Database, provider: string, places: PublicPlace[]) {
   const now = Math.floor(Date.now() / 1000)
   const statements = places.map((place) => db.prepare(`INSERT INTO public_places
-    (provider,source_id,title,category,address,latitude,longitude,telephone,image_url,source_url,official_tags,source_modified_at,synced_at,active)
-    VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,1)
+    (provider,source_id,title,category,address,latitude,longitude,telephone,image_url,source_url,official_tags,source_modified_at,synced_at,active,event_start_date,event_end_date)
+    VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,1,?14,?15)
     ON CONFLICT(provider,source_id) DO UPDATE SET title=excluded.title,category=excluded.category,address=excluded.address,
     latitude=excluded.latitude,longitude=excluded.longitude,telephone=excluded.telephone,image_url=excluded.image_url,
-    source_url=excluded.source_url,official_tags=excluded.official_tags,source_modified_at=excluded.source_modified_at,synced_at=excluded.synced_at,active=1`)
+    source_url=excluded.source_url,official_tags=excluded.official_tags,source_modified_at=excluded.source_modified_at,synced_at=excluded.synced_at,
+    active=1,event_start_date=excluded.event_start_date,event_end_date=excluded.event_end_date`)
     .bind(place.provider, place.sourceId, place.title, place.category, place.address, place.latitude, place.longitude,
-      place.telephone, place.imageUrl, place.sourceUrl, JSON.stringify(place.officialTags), place.sourceModifiedAt ?? null, now))
+      place.telephone, place.imageUrl, place.sourceUrl, JSON.stringify(place.officialTags), place.sourceModifiedAt ?? null, now,
+      place.eventStartDate ?? '', place.eventEndDate ?? ''))
   for (let index = 0; index < statements.length; index += 50) await db.batch(statements.slice(index, index + 50))
   await db.prepare('UPDATE public_places SET active=0 WHERE provider=?1 AND synced_at < ?2').bind(provider, now).run()
   await markReady(db, provider, places.length, now)
@@ -206,14 +227,18 @@ export async function syncPublicData(env: PublicDataEnv) {
 
 export async function nearbyPublicPlaces(db: D1Database, center: { latitude: number; longitude: number }, radiusKm: number, limit = 120, travelDate?: string) {
   const latDelta = radiusKm / 111, lonDelta = radiusKm / (111 * Math.max(.2, Math.cos(center.latitude * Math.PI / 180)))
-  const date = (travelDate ?? '').replace(/-/g, '')
+  const nowKst = new Date(Date.now() + 9 * 3600_000)
+  const today = `${nowKst.getUTCFullYear()}${String(nowKst.getUTCMonth() + 1).padStart(2, '0')}${String(nowKst.getUTCDate()).padStart(2, '0')}`
+  const date = travelDate ? travelDate.replace(/-/g, '') : today
   const result = await db.prepare(`SELECT p.provider,p.source_id,p.title,p.category,p.address,p.latitude,p.longitude,p.source_url,p.official_tags,
-    p.source_modified_at,p.overview,p.opening_hours,p.rest_date,p.fee_info,
+    p.source_modified_at,p.overview,p.opening_hours,p.rest_date,p.fee_info,p.event_start_date,p.event_end_date,
     e.title event_title,e.opening_hours event_hours,e.fee_info event_fee
     FROM public_places p LEFT JOIN public_events e ON e.active=1 AND e.venue_name<>''
       AND (instr(lower(p.title),lower(e.venue_name))>0 OR instr(lower(e.venue_name),lower(p.title))>0)
       AND (?1='' OR (replace(e.start_date,'-','')<=?1 AND replace(e.end_date,'-','')>=?1))
-    WHERE p.active=1 AND p.latitude BETWEEN ?2 AND ?3 AND p.longitude BETWEEN ?4 AND ?5 LIMIT ?6`)
+    WHERE p.active=1
+      AND (p.category<>'공연·축제' OR (p.event_start_date<>'' AND p.event_end_date<>'' AND p.event_start_date<=?1 AND p.event_end_date>=?1))
+      AND p.latitude BETWEEN ?2 AND ?3 AND p.longitude BETWEEN ?4 AND ?5 LIMIT ?6`)
     .bind(date, center.latitude - latDelta, center.latitude + latDelta, center.longitude - lonDelta, center.longitude + lonDelta, limit).all<any>()
   return result.results
 }

@@ -99,7 +99,8 @@ const mapPublicPlaces = (rows: any[]): SearchPlace[] => rows.map((row) => ({
     : row.provider === 'BUSAN_MODEL_FOOD' ? '부산광역시 모범음식점'
     : row.provider === 'KHS_HERITAGE' ? '국가유산청 공식 데이터' : '한국관광공사 TourAPI',
   verifiedAt: String(row.source_modified_at || new Date().toISOString().slice(0, 10)).slice(0, 10),
-  detail: [row.event_title ? `오늘의 전시: ${row.event_title}` : '', row.opening_hours || row.event_hours, row.overview]
+  detail: [row.event_start_date && row.event_end_date ? `운영 기간 ${String(row.event_start_date).replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3')}~${String(row.event_end_date).replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3')}` : '',
+    row.event_title ? `오늘의 전시: ${row.event_title}` : '', row.opening_hours || row.event_hours, row.overview]
     .filter(Boolean).join(' · ').slice(0, 220),
 }))
 
