@@ -696,6 +696,7 @@ function Courses({ courses, selected, setSelected, onVote }: { courses: Course[]
 }
 
 function CourseCard({ course, expanded, onToggle }: { course: Course; expanded: boolean; onToggle: () => void }) {
+  const modelRestaurantCount = course.days[0].filter(isOfficialModelRestaurant).length
   return (
     <article className="course-card">
       <div className="course-hero">
@@ -705,9 +706,10 @@ function CourseCard({ course, expanded, onToggle }: { course: Course; expanded: 
       </div>
       <div className="tag-row">{course.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
       <div className="course-place-preview"><MapPin size={15} /><div><small>방문 장소</small><p>{course.days[0].map((stop) => stop.title).join(' → ')}</p></div></div>
+      {modelRestaurantCount > 0 && <div className="course-official-summary"><ShieldCheck size={14} /> 부산시 모범음식점 {modelRestaurantCount}곳 포함</div>}
       <div className="course-stats"><span><TrainFront size={17} /> 예상 이동 {course.travelMinutes}분</span><span><MapPin size={17} /> {course.days[0].length}개 지점</span></div>
       <button className="outline-button" onClick={onToggle}>{expanded ? '상세 경로 접기' : '상세 경로 보기'} <ChevronRight size={17} /></button>
-      {expanded && <div className="course-route-detail"><div className="course-route-heading"><Map size={15} /><b>코스 이동 경로</b></div><RouteMap stops={course.days[0]} /><div className="mini-timeline">{course.days[0].map((stop, index) => <div key={stop.time + stop.title}><time>{stop.time}</time><i className={stop.shared ? 'shared' : ''} /><span><b>{index + 1}. {stop.title}</b><small>{stop.category} · {stop.duration}{stop.shared ? ' · 공통 일정' : ''}</small></span></div>)}</div><p className="map-disclaimer">지도 선은 방문 순서를 나타냅니다. 실제 이동 경로와 시간은 네이버지도에서 다시 확인해 주세요.</p></div>}
+      {expanded && <div className="course-route-detail"><div className="course-route-heading"><Map size={15} /><b>코스 이동 경로</b></div><RouteMap stops={course.days[0]} /><div className="mini-timeline">{course.days[0].map((stop, index) => <div key={stop.time + stop.title}><time>{stop.time}</time><i className={stop.shared ? 'shared' : ''} /><span><b>{index + 1}. {stop.title}{isOfficialModelRestaurant(stop) && <OfficialRestaurantBadge />}</b><small>{stop.category} · {stop.duration}{stop.shared ? ' · 공통 일정' : ''}</small></span></div>)}</div><p className="map-disclaimer">지도 선은 방문 순서를 나타냅니다. 실제 이동 경로와 시간은 네이버지도에서 다시 확인해 주세요.</p></div>}
     </article>
   )
 }
@@ -861,7 +863,7 @@ function Timeline({ stops, onRemove, onMove, onEdit, disabled, renderAfter }: { 
     const after = renderAfter?.(index)
     const dragging = dragSource === index
     const dragOver = dragSource !== null && dragTarget === index && !dragging
-    return <React.Fragment key={`${stop.time}-${stop.title}-${index}`}><div data-stop-index={index} className={`timeline-stop ${dragging ? 'dragging' : ''} ${dragOver ? 'drag-over' : ''}`}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className={`stop-card ${onMove ? 'draggable-stop-card' : ''}`} tabIndex={onMove ? 0 : undefined} aria-roledescription={onMove ? '순서를 바꿀 수 있는 장소 카드' : undefined} onPointerDown={(event) => startDrag(event, index)} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} onKeyDown={(event) => { if (!onMove || disabled || !event.altKey) return; if (event.key === 'ArrowUp' && index > 0) { event.preventDefault(); onMove(index, -1) } if (event.key === 'ArrowDown' && index < stops.length - 1) { event.preventDefault(); onMove(index, 1) } }}><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onMove && <><button type="button" disabled={disabled || index === 0} aria-label={`${stop.title} 위로 이동`} onClick={() => onMove(index, -1)}><ChevronUp size={16} /></button><button type="button" disabled={disabled || index === stops.length - 1} aria-label={`${stop.title} 아래로 이동`} onClick={() => onMove(index, 1)}><ChevronDown size={16} /></button></>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><b>{stop.title}</b><p>{stop.description}</p>{onEdit && <button className="replace-place-button" disabled={disabled} onClick={() => onEdit(index)}><MapPin size={13} /> 장소 변경</button>}<div className="stop-footer"><small>{stop.source ?? '운영자 검수'}{stop.verifiedAt ? ` · ${stop.verifiedAt} 확인` : ''}</small></div><PlaceLookup stop={stop} /></div></div>{after && <div className="inline-route-editor">{after}</div>}</React.Fragment>
+    return <React.Fragment key={`${stop.time}-${stop.title}-${index}`}><div data-stop-index={index} className={`timeline-stop ${dragging ? 'dragging' : ''} ${dragOver ? 'drag-over' : ''}`}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className={`stop-card ${onMove ? 'draggable-stop-card' : ''}`} tabIndex={onMove ? 0 : undefined} aria-roledescription={onMove ? '순서를 바꿀 수 있는 장소 카드' : undefined} onPointerDown={(event) => startDrag(event, index)} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} onKeyDown={(event) => { if (!onMove || disabled || !event.altKey) return; if (event.key === 'ArrowUp' && index > 0) { event.preventDefault(); onMove(index, -1) } if (event.key === 'ArrowDown' && index < stops.length - 1) { event.preventDefault(); onMove(index, 1) } }}><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onMove && <><button type="button" disabled={disabled || index === 0} aria-label={`${stop.title} 위로 이동`} onClick={() => onMove(index, -1)}><ChevronUp size={16} /></button><button type="button" disabled={disabled || index === stops.length - 1} aria-label={`${stop.title} 아래로 이동`} onClick={() => onMove(index, 1)}><ChevronDown size={16} /></button></>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><div className="stop-title-row"><b>{stop.title}</b>{isOfficialModelRestaurant(stop) && <OfficialRestaurantBadge />}</div><p>{stop.description}</p>{onEdit && <button className="replace-place-button" disabled={disabled} onClick={() => onEdit(index)}><MapPin size={13} /> 장소 변경</button>}<div className="stop-footer"><small>{stop.source ?? '운영자 검수'}{stop.verifiedAt ? ` · ${stop.verifiedAt} 기준` : ''}</small></div><PlaceLookup stop={stop} /></div></div>{after && <div className="inline-route-editor">{after}</div>}</React.Fragment>
   })}</div>
 }
 
@@ -933,6 +935,12 @@ function iconFor(category: string) {
   if (category === '교통') return <TrainFront size={15} />
   if (category === '숙소') return <Home size={15} />
   return <MapPin size={15} />
+}
+
+const isOfficialModelRestaurant = (stop: Stop) => stop.source === '부산광역시 모범음식점'
+
+function OfficialRestaurantBadge() {
+  return <span className="official-restaurant-badge"><ShieldCheck size={12} /> 부산시 모범음식점</span>
 }
 
 function Progress({ current, total, label }: { current: number; total: number; label: string }) {

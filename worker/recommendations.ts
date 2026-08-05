@@ -87,22 +87,28 @@ const strip = (value: unknown) => String(value ?? '')
 
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
-const publicKeyword = (category: string) => category === '맛집' ? '맛집'
+export const keywordForPublicPlace = (category: string, officialTags: string[] = []) => category === '맛집'
+  ? officialTags.map((tag) => foodKeyword[tag]).find(Boolean) ?? '맛집'
   : category === '액티비티' ? '체험'
     : category === '쇼핑' ? '쇼핑'
       : category === '역사·문화' || category === '공연·축제' ? '전시' : '관광명소'
 
-const mapPublicPlaces = (rows: any[]): SearchPlace[] => rows.map((row) => ({
+const mapPublicPlaces = (rows: any[]): SearchPlace[] => rows.map((row) => {
+  let officialTags: string[] = []
+  try { officialTags = JSON.parse(String(row.official_tags ?? '[]')) } catch { officialTags = [] }
+  const isModelRestaurant = row.provider === 'BUSAN_MODEL_FOOD'
+  return {
   title: String(row.title), category: String(row.category), roadAddress: String(row.address ?? ''),
-  latitude: Number(row.latitude), longitude: Number(row.longitude), keyword: publicKeyword(String(row.category)),
+  latitude: Number(row.latitude), longitude: Number(row.longitude), keyword: keywordForPublicPlace(String(row.category), officialTags),
   source: row.provider === 'BUSAN_FOOD' ? '부산광역시 맛집정보'
     : row.provider === 'BUSAN_MODEL_FOOD' ? '부산광역시 모범음식점'
     : row.provider === 'KHS_HERITAGE' ? '국가유산청 공식 데이터' : '한국관광공사 TourAPI',
   verifiedAt: String(row.source_modified_at || new Date().toISOString().slice(0, 10)).slice(0, 10),
-  detail: [row.event_start_date && row.event_end_date ? `운영 기간 ${String(row.event_start_date).replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3')}~${String(row.event_end_date).replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3')}` : '',
+  detail: [isModelRestaurant && officialTags.length > 1 ? `공식 분류 ${officialTags.slice(1).join(' · ')}` : '',
+    row.event_start_date && row.event_end_date ? `운영 기간 ${String(row.event_start_date).replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3')}~${String(row.event_end_date).replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3')}` : '',
     row.event_title ? `오늘의 전시: ${row.event_title}` : '', row.opening_hours || row.event_hours, row.overview]
     .filter(Boolean).join(' · ').slice(0, 220),
-}))
+}})
 
 const normalizeSearchQuery = (query: string) => query.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ko-KR')
 

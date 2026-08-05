@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { curatedFallbackPlaces, distanceKm, recommendationSearchRequestCount, resolveVisitCount, selectPlaces } from '../worker/recommendations'
+import { curatedFallbackPlaces, distanceKm, keywordForPublicPlace, recommendationSearchRequestCount, resolveVisitCount, selectPlaces } from '../worker/recommendations'
 import { foods, themes } from './data'
 
 describe('경로 기반 추천 거리 계산', () => {
+  it('모범음식점 공식 업태를 음식 취향 키워드로 사용한다', () => {
+    expect(keywordForPublicPlace('맛집', ['부산광역시 모범음식점', '한식', '돼지국밥'])).toBe('한식')
+    expect(keywordForPublicPlace('맛집', ['부산광역시 추천 맛집'])).toBe('맛집')
+  })
   it('서면 주변 두 지점의 실제 거리를 계산한다', () => {
     const seomyeon = { latitude: 35.1577, longitude: 129.0590 }
     const jeonpo = { latitude: 35.1577, longitude: 129.0630 }
