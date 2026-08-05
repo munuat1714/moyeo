@@ -4,3 +4,9 @@ dist/
 *.log
 *.tsbuildinfo
 .DS_Store
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/
+*.jks
+*.keystore
