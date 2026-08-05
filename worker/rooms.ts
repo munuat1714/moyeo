@@ -32,6 +32,38 @@ function text(value: unknown, max: number) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
 
+export function isoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function validStringArray(value: unknown, maxItems: number) {
+  return Array.isArray(value) && value.length <= maxItems
+    && value.every((item) => typeof item === 'string' && item.trim().length > 0 && item.length <= 30);
+}
+
+export function validPreference(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const preference = value as Record<string, unknown>;
+  const placeCount = Number(preference.placeCount);
+  return validStringArray(preference.themes, 10) && validStringArray(preference.food, 12)
+    && validStringArray(preference.mood, 10) && Number.isInteger(placeCount) && placeCount >= 1 && placeCount <= 6;
+}
+
+export function validItinerary(days: unknown) {
+  return Array.isArray(days) && days.length >= 1 && days.length <= 7 && days.every((day) => Array.isArray(day)
+    && day.length >= 1 && day.length <= 20 && day.every((stop) => {
+      if (!stop || typeof stop !== 'object' || Array.isArray(stop)) return false;
+      const item = stop as Record<string, unknown>;
+      return typeof item.title === 'string' && item.title.trim().length > 0 && item.title.length <= 100
+        && typeof item.time === 'string' && item.time.length <= 10
+        && typeof item.category === 'string' && item.category.length <= 30
+        && typeof item.duration === 'string' && item.duration.length <= 30
+        && typeof item.description === 'string' && item.description.length <= 1000;
+    }));
+}
+
 async function hashToken(token: string) {
   const bytes = new TextEncoder().encode(token);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -98,7 +130,7 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
     const hostName = text(body.hostName, 20), startDate = text(body.startDate, 10), endDate = text(body.endDate, 10);
     const transport = routeMode === 'open' ? '대중교통' : text(body.transport, 20), stay = text(body.stay, 30);
     const expectedMembers = Number(body.expectedMembers ?? 4);
-    if (!name || (routeMode === 'fixed' && (!origin || !destination)) || !hostName || !startDate || !endDate || !Number.isInteger(expectedMembers) || expectedMembers < 1 || expectedMembers > 6) {
+    if (!name || (routeMode === 'fixed' && (!origin || !destination)) || !hostName || !isoDate(startDate) || !isoDate(endDate) || startDate !== endDate || !Number.isInteger(expectedMembers) || expectedMembers < 1 || expectedMembers > 6) {
       return json({ error: '여행방 필수 정보를 확인해 주세요.' }, 400);
     }
     const roomId = randomRoomId(), memberId = crypto.randomUUID(), token = crypto.randomUUID();
@@ -202,7 +234,7 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
     if (!member.is_host) return json({ error: '최종 경로는 방장만 수정할 수 있습니다.' }, 403);
     if (!room.final_course_id) return json({ error: '최종 코스를 먼저 확정해 주세요.' }, 409);
     const body = await readBody(request), days = body?.days;
-    if (!Array.isArray(days) || days.length < 1 || days.length > 7 || days.some((day) => !Array.isArray(day) || day.length < 1 || day.length > 20)) {
+    if (!validItinerary(days)) {
       return json({ error: '일정 형식을 확인해 주세요.' }, 400);
     }
     const encoded = JSON.stringify(days);
@@ -213,7 +245,7 @@ export async function handleRoomApi(request: Request, db: D1Database, url: URL, 
 
   if (action === 'preferences' && request.method === 'PUT') {
     const body = await readBody(request), preference = body?.preference;
-    if (!preference || typeof preference !== 'object') return json({ error: '취향 정보를 확인해 주세요.' }, 400);
+    if (!validPreference(preference)) return json({ error: '취향 정보를 확인해 주세요.' }, 400);
     const encoded = JSON.stringify(preference);
     if (encoded.length > 2000) return json({ error: '취향 정보가 너무 깁니다.' }, 400);
     await db.prepare('UPDATE members SET preference_json = ?1 WHERE id = ?2').bind(encoded, member.id).run();

@@ -12,6 +12,7 @@ import { deleteExpiredRooms, handleRoomApi } from "./rooms";
 import { cachedPlaceSearch, selectBestPlaceMatch } from "./recommendations";
 import { publicDataStatus, syncPublicData } from "./public-data";
 import { handleAnalyticsDashboard } from "./analytics-dashboard";
+import { consumeRateLimit } from "./operations";
 
 interface Env {
   DB: D1Database;
@@ -37,6 +38,24 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
+function secured(response: Response, cacheControl?: string) {
+  const headers = new Headers(response.headers);
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
+  if (cacheControl) headers.set('Cache-Control', cacheControl);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+async function rateLimitResponse(db: D1Database, scope: string, limit: number, windowSeconds: number) {
+  const result = await consumeRateLimit(db, scope, limit, windowSeconds);
+  return result.allowed ? null : Response.json({ error: '요청이 많습니다. 잠시 후 다시 시도해 주세요.' }, {
+    status: 429, headers: { 'Retry-After': String(result.retryAfter), 'Cache-Control': 'no-store' },
+  });
+}
+
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
 // To route SVGs through the optimizer (with security headers), set
@@ -51,6 +70,8 @@ export default {
     if (analyticsResponse) return analyticsResponse;
 
     if (url.pathname === "/api/events" && request.method === "POST") {
+      const limited = await rateLimitResponse(env.DB, 'events:global', 5000, 3600);
+      if (limited) return secured(limited);
       const allowed = new Set([
         "landing_view", "demo_view", "landing_interest_yes", "landing_interest_not_yet", "landing_demo_click",
         "room_created", "recommendations_viewed", "final_route_confirmed", "schedule_edit", "schedule_copy",
@@ -75,11 +96,20 @@ export default {
     }
 
     if (url.pathname.startsWith('/api/rooms')) {
+      if (url.pathname === '/api/rooms' && request.method === 'POST') {
+        const limited = await rateLimitResponse(env.DB, 'rooms:create:global', 1000, 3600);
+        if (limited) return secured(limited);
+      }
+      const joinMatch = request.method === 'POST' && url.pathname.match(/^\/api\/rooms\/([a-z0-9]+)\/members$/);
+      if (joinMatch) {
+        const limited = await rateLimitResponse(env.DB, `rooms:join:${joinMatch[1]}`, 30, 600);
+        if (limited) return secured(limited);
+      }
       const roomResponse = await handleRoomApi(request, env.DB, url, {
         clientId: env.NAVER_SEARCH_CLIENT_ID,
         clientSecret: env.NAVER_SEARCH_CLIENT_SECRET,
       });
-      if (roomResponse) return roomResponse;
+      if (roomResponse) return secured(roomResponse);
     }
 
     if (url.pathname === "/api/naver/config") {
@@ -90,17 +120,32 @@ export default {
     }
 
     if (url.pathname === "/api/public-data/status" && request.method === "GET") {
-      return Response.json({ enabled: Boolean(env.PUBLIC_DATA_SERVICE_KEY), providers: await publicDataStatus(env.DB) }, {
+      const providers = await publicDataStatus(env.DB);
+      return secured(Response.json({ enabled: Boolean(env.PUBLIC_DATA_SERVICE_KEY), providers: providers.map((item: any) => ({
+        provider: item.provider, status: item.status, lastCompletedAt: item.last_completed_at, itemCount: item.item_count,
+      })) }, {
         headers: { "Cache-Control": "public, max-age=300" },
-      });
+      }));
+    }
+
+    if (url.pathname === "/api/health" && request.method === "GET") {
+      const providers = await publicDataStatus(env.DB) as any[];
+      const unavailable = providers.filter((item) => item.status === 'failed' && Number(item.item_count) === 0).map((item) => item.provider);
+      const stale = providers.filter((item) => item.status === 'stale').map((item) => item.provider);
+      const healthy = unavailable.length === 0;
+      return secured(Response.json({ status: healthy ? 'ok' : 'degraded', unavailable, stale }, {
+        status: healthy ? 200 : 503, headers: { 'Cache-Control': 'no-store' },
+      }));
     }
 
     if (url.pathname === "/api/public-data/sync") {
       if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
       const token = request.headers.get("X-Sync-Token");
       if (!env.PUBLIC_DATA_SYNC_TOKEN || token !== env.PUBLIC_DATA_SYNC_TOKEN) {
-        return Response.json({ error: "Unauthorized" }, { status: 401 });
+        return secured(Response.json({ error: "Unauthorized" }, { status: 401 }));
       }
+      const limited = await rateLimitResponse(env.DB, 'public-data:sync', 12, 3600);
+      if (limited) return secured(limited);
       const providers = url.searchParams.get("providers")?.split(",").map((value) => value.trim()).filter(Boolean);
       const result = await syncPublicData({ DB: env.DB, PUBLIC_DATA_SERVICE_KEY: env.PUBLIC_DATA_SERVICE_KEY }, providers);
       return Response.json(result, { headers: { "Cache-Control": "no-store" } });
@@ -116,6 +161,8 @@ export default {
       if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) {
         return Response.json({ error: "네이버 지역 검색이 아직 설정되지 않았습니다." }, { status: 503 });
       }
+      const limited = await rateLimitResponse(env.DB, 'naver-local:global', 1000, 3600);
+      if (limited) return secured(limited);
       try {
         const items = await cachedPlaceSearch(query, {
           clientId: env.NAVER_SEARCH_CLIENT_ID,
@@ -153,12 +200,17 @@ export default {
     // Delegate everything else to vinext, forwarding ctx so that
     // ctx.waitUntil() is available to background cache writes and
     // other deferred work via getRequestExecutionContext().
-    return handler.fetch(request, env, ctx);
+    const response = await handler.fetch(request, env, ctx);
+    const cacheControl = url.pathname === '/' && request.headers.get('RSC') !== '1'
+      ? 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400'
+      : undefined;
+    return secured(response, cacheControl);
   },
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(Promise.all([
       deleteExpiredRooms(env.DB),
       env.DB.prepare("DELETE FROM anonymous_event_counts WHERE event_date < date('now','+9 hours','-180 days')").run(),
+      env.DB.prepare("DELETE FROM request_rate_limits WHERE expires_at < strftime('%s','now')").run(),
       syncPublicData({ DB: env.DB, PUBLIC_DATA_SERVICE_KEY: env.PUBLIC_DATA_SERVICE_KEY }),
     ]));
   },

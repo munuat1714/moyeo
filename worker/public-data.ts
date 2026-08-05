@@ -1,3 +1,5 @@
+import { acquireOperationLock, releaseOperationLock } from './operations'
+
 export type PublicDataEnv = { DB: D1Database; PUBLIC_DATA_SERVICE_KEY?: string }
 
 export type PublicPlace = {
@@ -221,6 +223,8 @@ async function markReady(db: D1Database, provider: string, count: number, now = 
 
 export async function syncPublicData(env: PublicDataEnv, requestedProviders?: string[]) {
   if (!env.PUBLIC_DATA_SERVICE_KEY) return { enabled: false, synced: [] }
+  const lockOwner = await acquireOperationLock(env.DB, 'public-data-sync', 15 * 60)
+  if (!lockOwner) return { enabled: true, synced: [], skipped: 'already_running' }
   const key = env.PUBLIC_DATA_SERVICE_KEY, synced: string[] = []
   const tasks: Array<{ id: string; run: () => Promise<void> }> = [
     { id: 'TOUR_API', run: async () => savePlaces(env.DB, 'TOUR_API', await tourPlaces(key)) },
@@ -231,19 +235,23 @@ export async function syncPublicData(env: PublicDataEnv, requestedProviders?: st
     { id: 'KMA_FORECAST', run: () => syncWeather(env.DB, key) },
   ]
   const requested = requestedProviders?.length ? new Set(requestedProviders) : null
-  for (const task of tasks.filter((item) => !requested || requested.has(item.id))) {
-    const now = Math.floor(Date.now() / 1000)
-    await env.DB.prepare(`INSERT INTO public_data_sync (provider,status,last_started_at,item_count) VALUES (?1,'syncing',?2,0)
-      ON CONFLICT(provider) DO UPDATE SET status='syncing',last_started_at=?2,error_message=NULL`).bind(task.id, now).run()
-    try { await task.run(); synced.push(task.id) }
-    catch (reason) {
-      const message = reason instanceof Error ? reason.message : String(reason)
-      console.error('public-data-sync-failed', { provider: task.id, message })
-      await env.DB.prepare("UPDATE public_data_sync SET status=CASE WHEN item_count>0 THEN 'stale' ELSE 'failed' END,error_message=?1 WHERE provider=?2")
-        .bind(message.slice(0, 500), task.id).run()
+  try {
+    for (const task of tasks.filter((item) => !requested || requested.has(item.id))) {
+      const now = Math.floor(Date.now() / 1000)
+      await env.DB.prepare(`INSERT INTO public_data_sync (provider,status,last_started_at,item_count) VALUES (?1,'syncing',?2,0)
+        ON CONFLICT(provider) DO UPDATE SET status='syncing',last_started_at=?2,error_message=NULL`).bind(task.id, now).run()
+      try { await task.run(); synced.push(task.id) }
+      catch (reason) {
+        const message = reason instanceof Error ? reason.message : String(reason)
+        console.error('public-data-sync-failed', { provider: task.id, message })
+        await env.DB.prepare("UPDATE public_data_sync SET status=CASE WHEN item_count>0 THEN 'stale' ELSE 'failed' END,error_message=?1 WHERE provider=?2")
+          .bind(message.slice(0, 500), task.id).run()
+      }
     }
+    return { enabled: true, synced }
+  } finally {
+    await releaseOperationLock(env.DB, 'public-data-sync', lockOwner)
   }
-  return { enabled: true, synced }
 }
 
 export async function nearbyPublicPlaces(db: D1Database, center: { latitude: number; longitude: number }, radiusKm: number, limit = 120, travelDate?: string) {
