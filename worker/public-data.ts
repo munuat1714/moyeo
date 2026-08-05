@@ -7,6 +7,11 @@ export type PublicPlace = {
   eventStartDate?: string; eventEndDate?: string
 }
 
+const ACTIVE_PUBLIC_DATA_PROVIDERS = [
+  'TOUR_API', 'BUSAN_FOOD', 'BUSAN_MODEL_FOOD', 'TOUR_DETAIL',
+  'BUSAN_EXHIBITION', 'KMA_FORECAST',
+] as const
+
 const TOUR_TYPES: Record<string, string> = {
   '12': '관광명소', '14': '역사·문화', '15': '공연·축제', '28': '액티비티', '38': '쇼핑', '39': '맛집',
 }
@@ -90,18 +95,25 @@ async function busanFoodPlaces(serviceKey: string) {
   })
 }
 
+export function mapModelRestaurantItem(item: Record<string, any>): PublicPlace | null {
+  const title = pick(item, 'bsnsNm', 'rstrtNm', 'RSTR_NM', '업소명', 'bsshNm', 'MAIN_TITLE')
+  const address = pick(item, 'addrRoad', 'addrJibun', 'addr', 'ADDR', '소재지', 'roadNmAddr', 'ADDR1')
+  const latitude = Number(pick(item, 'lat', 'LAT', 'latitude', '위도'))
+  const longitude = Number(pick(item, 'lng', 'LNG', 'longitude', '경도'))
+  if (!title || !Number.isFinite(latitude) || !Number.isFinite(longitude) || !latitude || !longitude) return null
+  const tags = ['부산광역시 모범음식점', clean(pick(item, 'bsnsCond')), clean(pick(item, 'menu'))].filter(Boolean)
+  return { provider: 'BUSAN_MODEL_FOOD', sourceId: String(pick(item, 'rstrtSn', 'RSTR_SN', '관리번호', 'idx') || `${title}:${address}`),
+    title: String(title), category: '맛집', address: String(address), latitude, longitude,
+    telephone: String(pick(item, 'tel', 'TEL', '전화번호')), imageUrl: '', sourceUrl: 'https://www.busan.go.kr/',
+    officialTags: tags, sourceModifiedAt: String(pick(item, 'dataDay', 'dsgnYmd', 'DSGN_YMD', '지정일자', 'specDate')) }
+}
+
 async function modelRestaurantPlaces(serviceKey: string) {
   const url = publicUrl('/6260000/BusanTblFnrstrnStusService/getTblFnrstrnStusInfo', serviceKey)
   Object.entries({ resultType: 'json', numOfRows: '1000', pageNo: '1' }).forEach(([key, value]) => url.searchParams.set(key, value))
-  return itemsFrom(await fetchJson(url)).flatMap((item): PublicPlace[] => {
-    const title = pick(item, 'rstrtNm', 'RSTR_NM', '업소명', 'bsshNm', 'MAIN_TITLE')
-    const address = pick(item, 'addr', 'ADDR', '소재지', 'roadNmAddr', 'ADDR1')
-    const latitude = Number(pick(item, 'lat', 'LAT', 'latitude', '위도')), longitude = Number(pick(item, 'lng', 'LNG', 'longitude', '경도'))
-    if (!title || !Number.isFinite(latitude) || !Number.isFinite(longitude) || !latitude || !longitude) return []
-    return [{ provider: 'BUSAN_MODEL_FOOD', sourceId: String(pick(item, 'rstrtSn', 'RSTR_SN', '관리번호', 'idx') || `${title}:${address}`),
-      title: String(title), category: '맛집', address: String(address), latitude, longitude,
-      telephone: String(pick(item, 'tel', 'TEL', '전화번호')), imageUrl: '', sourceUrl: 'https://www.busan.go.kr/',
-      officialTags: ['부산광역시 모범음식점'], sourceModifiedAt: String(pick(item, 'dsgnYmd', 'DSGN_YMD', '지정일자')) }]
+  return itemsFrom(await fetchJson(url)).flatMap((item) => {
+    const place = mapModelRestaurantItem(item)
+    return place ? [place] : []
   })
 }
 
@@ -252,5 +264,11 @@ export async function weatherRiskForDate(db: D1Database, travelDate?: string) {
 }
 
 export async function publicDataStatus(db: D1Database) {
-  return (await db.prepare('SELECT provider,status,last_completed_at,item_count,error_message FROM public_data_sync ORDER BY provider').all()).results
+  const rows = (await db.prepare(`SELECT provider,status,last_completed_at,item_count,error_message FROM public_data_sync
+    WHERE provider IN (${ACTIVE_PUBLIC_DATA_PROVIDERS.map(() => '?').join(',')}) ORDER BY provider`)
+    .bind(...ACTIVE_PUBLIC_DATA_PROVIDERS).all<any>()).results
+  const byProvider = new Map(rows.map((row: any) => [row.provider, row]))
+  return ACTIVE_PUBLIC_DATA_PROVIDERS.map((provider) => byProvider.get(provider) ?? {
+    provider, status: 'pending', last_completed_at: null, item_count: 0, error_message: null,
+  })
 }
