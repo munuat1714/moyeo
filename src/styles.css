@@ -302,3 +302,44 @@ body { background: #fff; }.app-shell { box-shadow: none; border-left: 1px solid 
 @media (min-width: 700px) {
   .app-shell { border-radius: 18px; }
 }
+
+/* Usability pass: readable mobile type, clear selection, and keyboard focus. */
+.hero-demo-link {
+  width: min(100%, 390px); min-height: 54px; margin: 36px auto 0; padding: 0 18px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border-radius: 12px; color: #fff; background: var(--green); font-size: 14px; font-weight: 800; text-decoration: none;
+}
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid #8ebfff; outline-offset: 3px;
+}
+.choice-grid button.selected, .choice-chips button.selected,
+.route-mode-options > button.active, .area-chips button.active,
+.segmented button.active, .place-count-ranges button.selected,
+.live-vote-choice.selected, .vote-options > button.selected {
+  color: #175fbd; border-color: #3182f6; background: #eaf3ff;
+}
+.choice-grid button.selected svg { color: #175fbd; }
+.choice-chips button, .area-chips button, .segmented button { min-height: 44px; }
+.place-lookup button, .place-lookup a, .replace-place-button { min-height: 40px; padding-inline: 12px; font-size: 11px; }
+.stop-tools button { min-width: 40px; min-height: 40px; }
+.route-data-note, .location-status, .location-results small,
+.data-notice, .map-disclaimer, .map-fallback-note, .stop-card small,
+.stop-card p, .stop-card em, .route-place-editor > small, .route-editor-title span,
+.route-editor-results span, .booking-list small, .booking-list span, .booking-notice {
+  font-size: 11px;
+}
+.location-results b, .route-editor-results b, .course-place-preview p,
+.course-place-preview small, .mini-timeline > div, .mini-timeline small { font-size: 12px; }
+.stop-card b { font-size: 15px; }.stop-card p { line-height: 1.6; }
+.live-code { font-size: 10px; }
+.map-fallback-note { line-height: 1.4; }
+.survey-actions button.selected { color: #fff; border-color: #75b5ff; background: var(--green); }
+
+@media (max-width: 430px) {
+  .simple-hero { padding-top: 48px; }
+  .simple-hero h1 { font-size: 39px; line-height: 1.12; }
+  .simple-hero > p { font-size: 15px; line-height: 1.7; }
+  .concept-flow small { font-size: 12px; }
+  .final-hero h2 { font-size: 27px; line-height: 1.25; }
+  .route-map { height: 340px; }
+}

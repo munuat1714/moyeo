@@ -17,6 +17,7 @@ import './styles.css'
 
 const STORAGE_KEY = 'modu-trip-state-v1'
 const EVENT_KEY = 'modu-trip-anonymous-events-v1'
+const ATTRIBUTION_KEY = 'modu-trip-attribution-v1'
 
 type AnonymousEvent = { name: string; at: string }
 
@@ -32,6 +33,16 @@ function track(name: string) {
   try {
     const events = JSON.parse(localStorage.getItem(EVENT_KEY) ?? '[]') as AnonymousEvent[]
     localStorage.setItem(EVENT_KEY, JSON.stringify([...events.slice(-49), { name, at: new Date().toISOString() }]))
+    const query = new URLSearchParams(window.location.search)
+    const incoming = {
+      source: query.get('utm_source') ?? '', medium: query.get('utm_medium') ?? '', campaign: query.get('utm_campaign') ?? '',
+    }
+    if (incoming.source || incoming.medium || incoming.campaign) sessionStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(incoming))
+    const attribution = JSON.parse(sessionStorage.getItem(ATTRIBUTION_KEY) ?? '{}') as typeof incoming
+    void fetch('/api/events', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+      body: JSON.stringify({ name, ...attribution }),
+    }).catch(() => undefined)
   } catch {
     // 체험은 분석 기록에 실패해도 계속 진행됩니다.
   }
@@ -76,6 +87,9 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
     setSelectedCourseId(courses[0].id)
     setCreateStage(1)
   }
+  const confirmReset = () => {
+    if (window.confirm('작성 중인 내용을 지우고 처음부터 다시 시작할까요?')) reset()
+  }
 
   const headerBack: Partial<Record<AppState['step'], AppState['step']>> = {
     create: 'home', room: 'create', preferences: 'room', analysis: 'room',
@@ -89,11 +103,11 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
           <button className="icon-button" aria-label="뒤로 가기" onClick={() => state.step === 'create' && createStage > 1 ? setCreateStage((stage) => stage - 1) : update({ step: headerBack[state.step] ?? 'home' })}>
             <ArrowLeft size={21} />
           </button>
-        ) : <div className="brand-mark">ㅁ</div>}
+        ) : <div className="brand-mark" aria-label="모두의 여행">M</div>}
         <div className="header-title">{state.step === 'home' ? '모두의 여행' : stepTitle[state.step]}</div>
         {state.step !== 'home' && (isDemo
           ? <a className="demo-home-link" href="/"><Home size={15} /> 랜딩</a>
-          : <button className="icon-button subtle" aria-label="처음부터 다시 시작" onClick={reset}><RotateCcw size={18} /></button>)}
+          : <button className="icon-button subtle" aria-label="처음부터 다시 시작" onClick={confirmReset}><RotateCcw size={18} /></button>)}
       </header>
 
       <main>
@@ -177,6 +191,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
         const result = await fetchLiveRecommendations(roomId)
         if (result.courses) {
           setRouteCourses(result.courses)
+          track('recommendations_viewed')
           return
         }
         await new Promise((resolve) => window.setTimeout(resolve, Math.min(5000, result.retryAfterMs ?? 1500)))
@@ -258,6 +273,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
       setSelectedCourseId('')
       if (snapshot?.room.expectedMembers === 1) {
         await resolveLiveVote(roomId)
+        track('final_route_confirmed')
         setShowFinalRoute(true)
       }
       await refresh()
@@ -268,7 +284,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
 
   const resolve = async () => {
     setWorking(true); setError('')
-    try { await resolveLiveVote(roomId); await refresh() }
+    try { const result = await resolveLiveVote(roomId); if (result.status === 'final') track('final_route_confirmed'); await refresh() }
     catch (reason) { setError(reason instanceof Error ? reason.message : '투표 결과를 확정하지 못했습니다.') }
     finally { setWorking(false) }
   }
@@ -364,25 +380,25 @@ function HomeScreen() {
         <h1>여행 계획,<br /><em>모두의 취향</em>에서 시작해요.</h1>
         <p>각자 가고 싶은 곳과 여행 스타일을 고르면, 친구 모두가 만족할 코스를 정리하고 투표로 결정하는 여행 계획 서비스입니다.</p>
         <div className="concept-flow" aria-label="모두의 여행 이용 개요">
-          <article><span><UsersRound size={20} /></span><div><b>취향을 모으고</b><small>맛집·카페·사진·산책 등 각자의 선택</small></div></article>
+          <article><span><UsersRound size={20} /></span><div><b>취향을 모으고</b><small>맛집·카페·사진·문화 등 각자의 선택</small></div></article>
           <i><ArrowRight size={17} /></i>
           <article><span><Sparkles size={20} /></span><div><b>코스를 만들고</b><small>공통점과 차이를 반영한 여행 일정</small></div></article>
           <i><ArrowRight size={17} /></i>
           <article><span><Vote size={20} /></span><div><b>함께 결정해요</b><small>눈치 보지 않는 투표로 최종 선택</small></div></article>
         </div>
+        <a className="hero-demo-link" href="/demo" onClick={() => track('landing_demo_click')}>개인정보 없이 부산 여행 만들어보기 <ArrowRight size={18} /></a>
       </section>
 
       <section className="interest-survey" aria-labelledby="interest-title">
         <div><span>한 가지만 알려주세요</span><h2 id="interest-title">이런 서비스가 있다면 사용해보고 싶나요?</h2><p>개인정보나 연락처는 받지 않습니다. 선택한 답변은 이 브라우저에만 저장됩니다.</p></div>
         <div className="survey-actions">
-          <button className={interest === 'yes' ? 'selected' : ''} onClick={() => answer('yes')}><Check size={18} /> 네, 사용해보고 싶어요</button>
-          <button className={interest === 'not-yet' ? 'selected' : ''} onClick={() => answer('not-yet')}><CircleDollarSign size={18} /> 아직은 잘 모르겠어요</button>
+          <button aria-pressed={interest === 'yes'} className={interest === 'yes' ? 'selected' : ''} onClick={() => answer('yes')}><Check size={18} /> 네, 사용해보고 싶어요</button>
+          <button aria-pressed={interest === 'not-yet'} className={interest === 'not-yet' ? 'selected' : ''} onClick={() => answer('not-yet')}><CircleDollarSign size={18} /> 아직은 잘 모르겠어요</button>
         </div>
         {interest && <div className="survey-thanks" role="status"><Check size={16} /><span>답변해주셔서 고마워요. 개인정보는 전송되지 않았습니다.</span></div>}
-        {interest === 'yes' && <a className="survey-demo-link" href="/demo" onClick={() => track('landing_demo_click')}>개인정보 없이 부산 여행 만들어보기 <ArrowRight size={18} /></a>}
       </section>
 
-      <footer className="simple-footer"><div><span className="brand-mark">ㅁ</span><b>모두의 여행</b></div><p>친구들의 취향을 모아 완성하는 여행 계획 서비스</p><small>© 2026 모두의 여행 팀</small></footer>
+      <footer className="simple-footer"><div><span className="brand-mark">M</span><b>모두의 여행</b></div><p>친구들의 취향을 모아 완성하는 여행 계획 서비스</p><small>© 2026 모두의 여행 팀</small></footer>
     </div>
   )
 }
@@ -406,6 +422,7 @@ function CreateTrip({ state, setState, stage, setStage }: { state: AppState; set
     try {
       const result = await createLiveRoom(state.trip, hostName, expectedMembers)
       saveRoomToken(result.roomId, result.token)
+      track('room_created')
       window.location.assign(`/demo?room=${result.roomId}`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '여행방을 만들지 못했습니다.')
@@ -623,12 +640,12 @@ function Preferences({ state, setState }: { state: AppState; setState: React.Dis
 
 function PreferenceGroup({ title, options, selected, onSelect, icons }: { title: string; options: string[]; selected: string[]; onSelect: (value: string) => void; icons?: boolean }) {
   const iconMap: Record<string, React.ReactNode> = { '맛집': <Utensils />, '감성 카페': <Coffee />, '사진 명소': <Sparkles />, '액티비티': <TrainFront />, '역사·문화': <Home />, '쇼핑': <WalletCards /> }
-  return <div className="preference-group"><h3>{title}</h3><div className={icons ? 'choice-grid' : 'choice-chips'}>{options.map((option) => <button key={option} className={selected.includes(option) ? 'selected' : ''} onClick={() => onSelect(option)}>{icons && iconMap[option]}{option}</button>)}</div></div>
+  return <div className="preference-group"><h3>{title}</h3><div className={icons ? 'choice-grid' : 'choice-chips'}>{options.map((option) => <button type="button" aria-pressed={selected.includes(option)} key={option} className={selected.includes(option) ? 'selected' : ''} onClick={() => onSelect(option)}>{icons && iconMap[option]}{option}</button>)}</div></div>
 }
 
 function PlaceCountControl({ value, onChange, openRoute = false }: { value: number; onChange: (value: number) => void; openRoute?: boolean }) {
   const ranges = [{ label: '1~2곳', value: 2, caption: '가볍게' }, { label: '3~4곳', value: 4, caption: '적당히' }, { label: '5~6곳', value: 6, caption: '알차게' }]
-  return <div className="preference-group"><h3>방문 장소 수</h3><div className="place-count-ranges">{ranges.map((range) => <button type="button" key={range.value} className={value === range.value ? 'selected' : ''} onClick={() => onChange(range.value)}><b>{range.label}</b><span>{range.caption}</span></button>)}</div><small className="place-count-note">{openRoute ? '추천 코스에 포함할 방문 장소 수예요.' : '출발·도착 장소는 개수에서 제외해요.'}</small></div>
+  return <div className="preference-group"><h3>방문 장소 수</h3><div className="place-count-ranges">{ranges.map((range) => <button type="button" aria-pressed={value === range.value} key={range.value} className={value === range.value ? 'selected' : ''} onClick={() => onChange(range.value)}><b>{range.label}</b><span>{range.caption}</span></button>)}</div><small className="place-count-note">{openRoute ? '추천 코스에 포함할 방문 장소 수예요.' : '출발·도착 장소는 개수에서 제외해요.'}</small></div>
 }
 
 function Analysis({ state, onNext }: { state: AppState; onNext: () => void }) {
@@ -659,7 +676,7 @@ function Courses({ courses, selected, setSelected, onVote }: { courses: Course[]
       <Progress current={4} total={4} label="맞춤 코스 추천" />
       <div className="section-heading"><h2>우리에게 맞는 3가지 코스</h2><p><b>60%는 함께</b>, 나머지 40%는 취향에 따라 달라요.</p></div>
       <div className="course-tabs">
-        {courses.map((course) => <button key={course.id} className={selected.id === course.id ? 'active' : ''} onClick={() => { setSelected(course); setDetail(false) }}><span>{course.emoji}</span>{course.title.split(' ')[0]}</button>)}
+        {courses.map((course) => <button aria-pressed={selected.id === course.id} key={course.id} className={selected.id === course.id ? 'active' : ''} onClick={() => { setSelected(course); setDetail(false) }}><span>{course.emoji}</span>{course.title.split(' ')[0]}</button>)}
       </div>
       <CourseCard course={selected} expanded={detail} onToggle={() => setDetail(!detail)} />
       <div className="common-note"><span>60%</span><div><b>세 코스가 함께 가는 곳</b><p>감천문화마을 · 자갈치시장 · 전포카페거리 · 광안리해수욕장</p></div></div>
@@ -712,6 +729,7 @@ function Voting({ courses, state, setState }: { courses: Course[]; state: AppSta
   const finalize = () => {
     const winner = result.tied ? [...result.winners].sort((a, b) => courses.find((c) => c.id === b)!.match - courses.find((c) => c.id === a)!.match)[0] : result.winners[0]
     setState((s) => ({ ...s, finalCourseId: winner, step: 'final' }))
+    track('final_route_confirmed')
   }
   return (
     <section className="page">
