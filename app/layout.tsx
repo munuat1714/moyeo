@@ -13,14 +13,14 @@ export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers()
   const host = requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host') ?? 'localhost:3000'
   const protocol = requestHeaders.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https')
-  const imageUrl = `${protocol}://${host}/og.png`
+  const imageUrl = `${protocol}://${host}/social/moyeo-cover.png`
   return {
     ...baseMetadata,
     manifest: '/manifest.webmanifest',
     applicationName: '모두의 여행',
     appleWebApp: { capable: true, title: '모두의 여행', statusBarStyle: 'default' },
     icons: { icon: '/icons/moyeo-192.png', apple: '/icons/moyeo-192.png' },
-    openGraph: { ...baseMetadata, type: 'website', locale: 'ko_KR', images: [{ url: imageUrl, width: 1200, height: 630, alt: '모두의 여행 서비스 소개' }] },
+    openGraph: { ...baseMetadata, type: 'website', locale: 'ko_KR', images: [{ url: imageUrl, width: 1942, height: 809, alt: '모두의 여행 서비스 소개' }] },
     twitter: { card: 'summary_large_image', ...baseMetadata, images: [imageUrl] },
   }
 }

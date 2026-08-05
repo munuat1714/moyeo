@@ -2,15 +2,28 @@ import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { Preferences } from '@capacitor/preferences'
 import { Share } from '@capacitor/share'
+import type { Stop } from './types'
 
 const RECENT_ROOMS_KEY = 'moyeo-recent-rooms-v1'
 const NOTIFICATION_KEY = 'moyeo-notifications-enabled'
+const SAVED_TRIPS_KEY = 'moyeo-saved-trips-v1'
 
 export type RecentRoom = {
   id: string
   name: string
   startDate: string
   expiresAt: number
+  savedAt: number
+}
+
+export type SavedTrip = {
+  id: string
+  roomId: string
+  name: string
+  courseTitle: string
+  startDate: string
+  memberCount: number
+  days: Stop[][]
   savedAt: number
 }
 
@@ -36,6 +49,31 @@ export async function rememberRoom(room: Omit<RecentRoom, 'savedAt'>) {
 export async function forgetRoom(roomId: string) {
   const current = await recentRooms()
   await Preferences.set({ key: RECENT_ROOMS_KEY, value: JSON.stringify(current.filter((room) => room.id !== roomId)) })
+}
+
+export async function savedTrips() {
+  try {
+    const { value } = await Preferences.get({ key: SAVED_TRIPS_KEY })
+    return (JSON.parse(value ?? '[]') as SavedTrip[]).sort((a, b) => b.savedAt - a.savedAt).slice(0, 50)
+  } catch {
+    return []
+  }
+}
+
+export async function saveTrip(trip: Omit<SavedTrip, 'savedAt'>) {
+  const current = await savedTrips()
+  const next = [{ ...trip, savedAt: Date.now() }, ...current.filter((item) => item.id !== trip.id)].slice(0, 50)
+  await Preferences.set({ key: SAVED_TRIPS_KEY, value: JSON.stringify(next) })
+  return next[0]
+}
+
+export async function deleteSavedTrip(id: string) {
+  const current = await savedTrips()
+  await Preferences.set({ key: SAVED_TRIPS_KEY, value: JSON.stringify(current.filter((trip) => trip.id !== id)) })
+}
+
+export async function hasSavedTrip(id: string) {
+  return (await savedTrips()).some((trip) => trip.id === id)
 }
 
 export async function notificationsEnabled() {

@@ -6,15 +6,15 @@ import {
   ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign,
   Bell, Clock3, Coffee, Compass, Copy, ExternalLink, Home, Map, MapPin, MessageCircle, Plus,
   RotateCcw, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, TrainFront, Trash2,
-  Settings, UserRound, UsersRound, Utensils, Vote, WalletCards, WifiOff, X,
+  Save, Settings, UserRound, UsersRound, Utensils, Vote, WalletCards, WifiOff, X,
 } from 'lucide-react'
 import { courses, demoPreferences, foods, initialState, moods, themes } from './data'
 import { aggregateThemes, allPreferencesComplete, formatPrice, recommendCourses, reorderStops, tallyVotes } from './logic'
 import { clearRoomToken, createLiveRoom, deleteLiveRoom, fetchLiveItinerary, fetchLiveRecommendations, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLiveItinerary, saveLivePreference, saveRoomToken, startLiveRoomWithCurrentMembers, submitLiveVote } from './live'
 import type { LiveSnapshot } from './live'
 import type { AppState, Course, Preference, Stop } from './types'
-import { forgetRoom, isNativeApp, notificationsEnabled, recentRooms, rememberRoom, scheduleTripNotifications, setNotificationsEnabled, shareInvite } from './mobile'
-import type { RecentRoom } from './mobile'
+import { deleteSavedTrip, forgetRoom, hasSavedTrip, isNativeApp, notificationsEnabled, recentRooms, rememberRoom, savedTrips, saveTrip, scheduleTripNotifications, setNotificationsEnabled, shareInvite } from './mobile'
+import type { RecentRoom, SavedTrip } from './mobile'
 import { apiUrl } from './runtime'
 import 'pretendard/dist/web/variable/pretendardvariable.css'
 import './styles.css'
@@ -84,7 +84,7 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service
   const [state, setState] = useState<AppState>(() => isDemo && !appMode
     ? { ...initialState, trip: { ...initialState.trip }, members: initialState.members.map((member) => ({ ...member })), step: 'create' }
     : { ...loadState(storageKey), step: 'home' })
-  const [appTab, setAppTab] = useState<'home' | 'trips' | 'settings'>('home')
+  const [appTab, setAppTab] = useState<'home' | 'my' | 'settings'>('home')
   const [online, setOnline] = useState(true)
   const [selectedCourseId, setSelectedCourseId] = useState(courses[0].id)
   const [finalTab, setFinalTab] = useState<'schedule' | 'map' | 'booking'>('schedule')
@@ -186,7 +186,7 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service
       </main>
       {appMode && state.step === 'home' && <nav className="native-tab-bar" aria-label="앱 메뉴">
         <button className={appTab === 'home' ? 'active' : ''} onClick={() => setAppTab('home')}><Home size={20} /><span>홈</span></button>
-        <button className={appTab === 'trips' ? 'active' : ''} onClick={() => setAppTab('trips')}><Map size={20} /><span>내 여행</span></button>
+        <button className={appTab === 'my' ? 'active' : ''} onClick={() => setAppTab('my')}><UserRound size={20} /><span>마이</span></button>
         <button className={appTab === 'settings' ? 'active' : ''} onClick={() => setAppTab('settings')}><Settings size={20} /><span>설정</span></button>
       </nav>}
     </div>
@@ -220,6 +220,10 @@ function LiveRoomApp({ roomId, appMode = false, nativeMode = false, basePath = '
   const [itinerarySaving, setItinerarySaving] = useState(false)
   const [showFinalRoute, setShowFinalRoute] = useState(false)
   const [expandedCourseId, setExpandedCourseId] = useState('')
+  const [addingStop, setAddingStop] = useState(false)
+  const [routeSaved, setRouteSaved] = useState(false)
+  const [savingRoute, setSavingRoute] = useState(false)
+  const [showNewTripPrompt, setShowNewTripPrompt] = useState(false)
 
   const refresh = async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -285,6 +289,11 @@ function LiveRoomApp({ roomId, appMode = false, nativeMode = false, basePath = '
     if (!showFinalRoute || !finalCourse || itinerary) return
     void fetchLiveItinerary(roomId).then((result) => setItinerary(result.days)).catch((reason) => setError(reason instanceof Error ? reason.message : '최종 일정을 불러오지 못했습니다.'))
   }, [showFinalRoute, finalCourse?.id, itinerary, roomId])
+
+  useEffect(() => {
+    if (!appMode || !finalCourse) return
+    void hasSavedTrip(roomId).then(setRouteSaved)
+  }, [appMode, finalCourse?.id, roomId])
 
   const join = async () => {
     if (!name.trim()) return
@@ -376,7 +385,7 @@ function LiveRoomApp({ roomId, appMode = false, nativeMode = false, basePath = '
 
   const persistItinerary = async (next: Stop[][]) => {
     setItinerarySaving(true); setError('')
-    try { await saveLiveItinerary(roomId, next); setItinerary(next) }
+    try { await saveLiveItinerary(roomId, next); setItinerary(next); setRouteSaved(false) }
     catch (reason) { setError(reason instanceof Error ? reason.message : '경로를 저장하지 못했습니다.') }
     finally { setItinerarySaving(false) }
   }
@@ -409,6 +418,61 @@ function LiveRoomApp({ roomId, appMode = false, nativeMode = false, basePath = '
     void persistItinerary(next)
   }
 
+  const removeStop = (day: number, index: number) => {
+    const source = itinerary ?? finalCourse?.days
+    if (!source || source[day].length <= 1) return setError('경로에는 장소가 한 곳 이상 필요합니다.')
+    if (!window.confirm(`${source[day][index].title}을(를) 경로에서 삭제할까요?`)) return
+    const next = source.map((items) => items.map((item) => ({ ...item })))
+    next[day].splice(index, 1)
+    setEditingStop(null); setAddingStop(false)
+    void persistItinerary(next)
+  }
+
+  const addStop = (place: LocationSuggestion) => {
+    const source = itinerary ?? finalCourse?.days
+    if (!source) return
+    const next = source.map((items) => items.map((item) => ({ ...item })))
+    const previous = next[finalDay].at(-1)?.time ?? '17:00'
+    const [hours, minutes] = previous.split(':').map(Number)
+    const total = ((hours || 17) * 60 + (minutes || 0) + 90) % (24 * 60)
+    next[finalDay].push({
+      time: `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`,
+      title: place.title, category: categoryFromPlace(place.category), duration: '1시간', price: 0, shared: false,
+      description: `${place.category || '장소'} · ${place.roadAddress || place.address || '주소는 네이버지도에서 확인해 주세요.'}`,
+      latitude: Number(place.mapy) / 10_000_000, longitude: Number(place.mapx) / 10_000_000,
+      source: '네이버 지역검색', verifiedAt: new Date().toISOString().slice(0, 10),
+      placeUrl: `https://map.naver.com/p/search/${encodeURIComponent(place.title)}`,
+    })
+    setAddingStop(false)
+    void persistItinerary(next)
+  }
+
+  const saveCurrentRoute = async () => {
+    if (!snapshot || !finalCourse) return false
+    setSavingRoute(true); setError('')
+    try {
+      await saveTrip({
+        id: roomId, roomId, name: snapshot.room.name, courseTitle: finalCourse.title,
+        startDate: snapshot.room.startDate, memberCount: snapshot.members.length,
+        days: (itinerary ?? finalCourse.days).map((day) => day.map((stop) => ({ ...stop }))),
+      })
+      setRouteSaved(true)
+      return true
+    } catch {
+      setError('확정 경로를 기기에 저장하지 못했습니다.')
+      return false
+    } finally { setSavingRoute(false) }
+  }
+
+  const requestNewTrip = () => {
+    if (appMode && finalCourse && !routeSaved) setShowNewTripPrompt(true)
+    else window.location.assign(basePath)
+  }
+
+  const saveAndStartNew = async () => {
+    if (await saveCurrentRoute()) window.location.assign(basePath)
+  }
+
   if (loading) return <div className="app-shell"><main className="live-state"><Sparkles /><b>여행방을 불러오는 중이에요</b></main></div>
   if (!snapshot) return <div className="app-shell"><main className="live-state"><Clock3 /><h2>여행방을 열 수 없어요</h2><p>{error}</p><a className="primary-button" href={basePath}>새 여행방 만들기</a></main></div>
 
@@ -416,7 +480,7 @@ function LiveRoomApp({ roomId, appMode = false, nativeMode = false, basePath = '
   const voteCounts = Object.values(snapshot.votes).reduce<Record<string, number>>((counts, id) => ({ ...counts, [id]: (counts[id] ?? 0) + 1 }), {})
   const roomControls = <section className="room-action-icons" aria-label="여행방 관리">
     <button type="button" onClick={copyInvite} aria-label={copied ? '초대 링크 복사 완료' : '친구 초대 링크 복사'}>{copied ? <Check size={19} /> : <Copy size={19} />}<span>{copied ? '복사 완료' : '초대'}</span></button>
-    <a href={basePath} aria-label="새 여행방 만들기"><RotateCcw size={19} /><span>새 여행</span></a>
+    <button type="button" onClick={requestNewTrip} aria-label="새 여행방 만들기"><RotateCcw size={19} /><span>새 여행</span></button>
     {requester?.host && <button type="button" className="delete-room-icon" disabled={deleting} onClick={removeRoom} aria-label={deleting ? '여행방 삭제 중' : '현재 여행방 삭제'}><Trash2 size={19} /><span>삭제</span></button>}
   </section>
 
@@ -440,20 +504,23 @@ function LiveRoomApp({ roomId, appMode = false, nativeMode = false, basePath = '
         {allReady && routeCourses && !finalCourse && <section className="live-section"><div className="section-heading"><h2>{snapshot.room.voteRound === 2 ? '공동 1위 결선투표' : '우리 경로에 맞는 코스 3가지'}</h2><p>{snapshot.room.voteRound === 2 ? '동률인 코스 중 하나를 다시 골라 주세요.' : recommendationSummary}</p></div><div className="live-course-list">{availableCourses.map((course) => <div key={course.id}><CourseCard course={course} expanded={expandedCourseId === course.id} onToggle={() => setExpandedCourseId((current) => current === course.id ? '' : course.id)} />{!snapshot.hasVoted && <button className={`live-vote-choice ${selectedCourseId === course.id ? 'selected' : ''}`} onClick={() => setSelectedCourseId(course.id)}>{selectedCourseId === course.id && <Check size={15} />} {soloTrip ? '이 코스 선택' : '이 코스에 투표'}</button>}</div>)}</div>{snapshot.hasVoted && !snapshot.allVoted && <div className="lock-note"><Vote size={18} /><div><b>내 투표를 저장했어요</b><span>모두 투표할 때까지 선택은 공개되지 않습니다.</span></div></div>}{!snapshot.hasVoted && <button className="primary-button sticky-action" disabled={!selectedCourseId || working} onClick={vote}>{soloTrip ? '투표하기' : '익명 투표 보내기'} <Vote size={18} /></button>}{snapshot.allVoted && <><div className="result-list">{availableCourses.map((course) => <div key={course.id}><span>{course.emoji}</span><div><b>{course.title}</b><div className="vote-bar"><i style={{ width: `${((voteCounts[course.id] ?? 0) / snapshot.members.length) * 100}%` }} /></div></div><strong>{voteCounts[course.id] ?? 0}표</strong></div>)}</div><button className="primary-button sticky-action" disabled={working} onClick={resolve}>{snapshot.room.voteRound === 1 ? '결과 확인하기' : '최종 코스 확정하기'} <ArrowRight size={18} /></button></>}</section>}
 
         {finalCourse && !showFinalRoute && <section className="live-section"><button className="confirmed-route-card" onClick={() => setShowFinalRoute(true)}><span className="result-icon"><Check /></span><span><small>취향 분석과 투표가 끝났어요</small><b>확정된 경로 보기</b><em>{finalCourse.title} · 취향 일치 {finalCourse.match}%</em></span><ArrowRight size={20} /></button></section>}
-        {finalCourse && showFinalRoute && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 당일치기 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.startDate} · {snapshot.members.length}명 · 취향 일치 {finalCourse.match}%</p></div><div className="final-route-heading"><Map size={16} /><b>최종 경로</b></div><RouteMap stops={(itinerary ?? finalCourse.days)[finalDay]} />{(itinerary ?? finalCourse.days).length > 1 ? <div className="day-switch">{(itinerary ?? finalCourse.days).map((_, index) => <button key={index} className={finalDay === index ? 'active' : ''} onClick={() => { setFinalDay(index); setEditingStop(null) }}>DAY {index + 1}</button>)}</div> : <div className="single-day-label"><CalendarDays size={15} /> 당일 일정</div>}{requester?.host && <div className="route-edit-notice"><Sparkles size={15} /><span>장소 카드를 끌거나 화살표로 순서를 바꾸고, `장소 변경`으로 실제 장소를 검색할 수 있어요.{itinerarySaving ? ' 저장 중…' : ''}</span></div>}<Timeline stops={(itinerary ?? finalCourse.days)[finalDay]} onMove={requester?.host ? (index, direction) => moveStop(finalDay, index, direction) : undefined} onEdit={requester?.host ? (index) => setEditingStop({ day: finalDay, index }) : undefined} disabled={itinerarySaving} renderAfter={(index) => editingStop?.day === finalDay && editingStop.index === index ? <RoutePlaceEditor current={(itinerary ?? finalCourse.days)[finalDay][index]} onCancel={() => setEditingStop(null)} onSelect={replaceStop} /> : null} /></section>}
+        {finalCourse && showFinalRoute && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 당일치기 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.startDate} · {snapshot.members.length}명 · 취향 일치 {finalCourse.match}%</p></div>{appMode && <button className={`save-route-button ${routeSaved ? 'saved' : ''}`} disabled={savingRoute} onClick={() => void saveCurrentRoute()}>{routeSaved ? <Check size={17} /> : <Save size={17} />}{routeSaved ? '마이페이지에 저장됨' : savingRoute ? '저장 중…' : '마이페이지에 경로 저장'}</button>}<div className="final-route-heading"><Map size={16} /><b>최종 경로</b></div><RouteMap stops={(itinerary ?? finalCourse.days)[finalDay]} />{(itinerary ?? finalCourse.days).length > 1 ? <div className="day-switch">{(itinerary ?? finalCourse.days).map((_, index) => <button key={index} className={finalDay === index ? 'active' : ''} onClick={() => { setFinalDay(index); setEditingStop(null); setAddingStop(false) }}>DAY {index + 1}</button>)}</div> : <div className="single-day-label"><CalendarDays size={15} /> 당일 일정</div>}{requester?.host && <div className="route-edit-notice"><Sparkles size={15} /><span>장소 순서를 바꾸거나 실제 장소를 추가·변경·삭제할 수 있어요.{itinerarySaving ? ' 저장 중…' : ''}</span></div>}<Timeline stops={(itinerary ?? finalCourse.days)[finalDay]} onMove={requester?.host ? (index, direction) => moveStop(finalDay, index, direction) : undefined} onEdit={requester?.host ? (index) => { setAddingStop(false); setEditingStop({ day: finalDay, index }) } : undefined} onRemove={requester?.host ? (index) => removeStop(finalDay, index) : undefined} disabled={itinerarySaving} renderAfter={(index) => editingStop?.day === finalDay && editingStop.index === index ? <RoutePlaceEditor current={(itinerary ?? finalCourse.days)[finalDay][index]} onCancel={() => setEditingStop(null)} onSelect={replaceStop} /> : null} />{requester?.host && <><button className="add-route-stop-button" disabled={itinerarySaving} onClick={() => { setEditingStop(null); setAddingStop(true) }}><Plus size={17} /> 장소 추가</button>{addingStop && <RoutePlaceEditor current={{ ...(itinerary ?? finalCourse.days)[finalDay].at(-1)!, title: '새 장소' }} onCancel={() => setAddingStop(false)} onSelect={addStop} />}</>}</section>}
         {finalCourse && <div className="final-room-controls">{roomControls}</div>}
       </>}
     </main>
+    {showNewTripPrompt && <div className="save-before-new-backdrop" role="presentation" onClick={() => setShowNewTripPrompt(false)}><section className="save-before-new-dialog" role="dialog" aria-modal="true" aria-labelledby="save-before-new-title" onClick={(event) => event.stopPropagation()}><span className="result-icon"><Save /></span><h2 id="save-before-new-title">확정 경로를 저장할까요?</h2><p>여행방은 7일 뒤 삭제됩니다. 마이페이지에 저장하면 이 기기에서 계속 확인할 수 있어요.</p><button className="primary-button" disabled={savingRoute} onClick={() => void saveAndStartNew()}>{savingRoute ? '저장 중…' : '저장하고 새 여행 만들기'}</button><button className="outline-button" onClick={() => window.location.assign(basePath)}>저장하지 않고 새 여행 만들기</button><button className="text-button" onClick={() => setShowNewTripPrompt(false)}>취소</button></section></div>}
   </div>
 }
 
-function MobileHomeScreen({ tab, nativeMode, onCreate }: { tab: 'home' | 'trips' | 'settings'; nativeMode: boolean; onCreate: () => void }) {
+function MobileHomeScreen({ tab, nativeMode, onCreate }: { tab: 'home' | 'my' | 'settings'; nativeMode: boolean; onCreate: () => void }) {
   const [rooms, setRooms] = useState<RecentRoom[]>([])
+  const [saved, setSaved] = useState<SavedTrip[]>([])
   const [roomCode, setRoomCode] = useState('')
   const [notificationOn, setNotificationOn] = useState(false)
   const [loadingRooms, setLoadingRooms] = useState(true)
   useEffect(() => {
     void recentRooms().then((items) => { setRooms(items); setLoadingRooms(false) })
+    void savedTrips().then(setSaved)
     void notificationsEnabled().then(setNotificationOn)
   }, [])
   const openRoom = (roomId: string) => window.location.assign(`/app?room=${roomId}`)
@@ -469,8 +536,11 @@ function MobileHomeScreen({ tab, nativeMode, onCreate }: { tab: 'home' | 'trips'
     <div className="native-app-version">모두의 여행 v1.0 · {nativeMode ? 'Android 앱' : '웹앱'}</div>
   </section>
 
-  if (tab === 'trips') return <section className="native-home-page">
-    <div className="native-page-heading"><span>MY TRIPS</span><h1>내 여행</h1><p>이 기기에서 만들거나 참여한 여행방이에요.</p></div>
+  if (tab === 'my') return <section className="native-home-page my-page">
+    <div className="native-page-heading"><span>MY PAGE</span><h1>마이페이지</h1><p>저장한 확정 경로와 진행 중인 여행방을 이 기기에서 확인해요.</p></div>
+    <div className="my-section-heading"><b>저장한 여행</b><span>{saved.length}개</span></div>
+    <SavedTripList trips={saved} onDelete={async (id) => { await deleteSavedTrip(id); setSaved(await savedTrips()) }} />
+    <div className="my-section-heading"><b>진행 중인 여행방</b><span>{rooms.length}개</span></div>
     <RecentRoomList rooms={rooms} loading={loadingRooms} onOpen={openRoom} />
     <button className="native-create-secondary" onClick={onCreate}><Plus size={18} /> 새 여행 만들기</button>
   </section>
@@ -485,6 +555,12 @@ function MobileHomeScreen({ tab, nativeMode, onCreate }: { tab: 'home' | 'trips'
     <div className="native-recent-heading"><b>최근 여행</b>{rooms.length > 0 && <span>{rooms.length}개</span>}</div>
     <RecentRoomList rooms={rooms.slice(0, 2)} loading={loadingRooms} onOpen={openRoom} compact />
   </section>
+}
+
+function SavedTripList({ trips, onDelete }: { trips: SavedTrip[]; onDelete: (id: string) => Promise<void> }) {
+  const [expanded, setExpanded] = useState('')
+  if (!trips.length) return <div className="native-room-empty"><Save size={22} /><b>저장한 여행이 없어요</b><span>확정된 경로에서 ‘마이페이지에 경로 저장’을 눌러 주세요.</span></div>
+  return <div className="saved-trip-list">{trips.map((trip) => <article key={trip.id} className={expanded === trip.id ? 'expanded' : ''}><button className="saved-trip-summary" onClick={() => setExpanded((current) => current === trip.id ? '' : trip.id)}><span className="native-room-date"><CalendarDays size={15} />{trip.startDate.slice(5).replace('-', '.')}</span><span><b>{trip.name}</b><small>{trip.courseTitle} · {trip.memberCount}명</small></span><ChevronDown size={18} /></button>{expanded === trip.id && <div className="saved-trip-detail"><ol>{trip.days.flat().map((stop, index) => <li key={`${stop.title}-${index}`}><time>{stop.time}</time><span><b>{stop.title}</b><small>{stop.category}</small></span></li>)}</ol><button className="delete-saved-trip" onClick={() => { if (window.confirm('저장한 여행을 마이페이지에서 삭제할까요?')) void onDelete(trip.id) }}><Trash2 size={14} /> 저장 목록에서 삭제</button></div>}</article>)}</div>
 }
 
 function RecentRoomList({ rooms, loading, onOpen, compact = false }: { rooms: RecentRoom[]; loading: boolean; onOpen: (id: string) => void; compact?: boolean }) {
@@ -550,7 +626,7 @@ function CreateTrip({ state, setState, stage, setStage, appMode = false, nativeM
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   const maxTravelDate = (() => {
     const date = new Date(`${today}T00:00:00Z`)
-    date.setUTCDate(date.getUTCDate() + 7)
+    date.setUTCFullYear(date.getUTCFullYear() + 1)
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
   })()
   const validDate = state.trip.startDate >= today && state.trip.startDate <= maxTravelDate
@@ -624,7 +700,7 @@ function CreateTrip({ state, setState, stage, setStage, appMode = false, nativeM
         <div className="section-heading"><h2>여행방 정보를 알려주세요</h2><p>친구들이 알아보기 쉬운 이름과 여행 날짜를 정해 주세요.</p></div>
         <div className="form-card">
           <label>여행방 이름<input value={state.trip.name} onChange={(event) => setTrip('name', event.target.value)} placeholder="예: 우리들의 부산 여행" /></label>
-          <label className="travel-date-label">여행 날짜<input className="travel-date-input" type="date" min={today} max={maxTravelDate} value={state.trip.startDate} onChange={(event) => { setTrip('startDate', event.target.value); setTrip('endDate', event.target.value) }} /><small className="travel-date-note">오늘부터 7일 이내 날짜를 선택해 주세요. 단기예보가 없는 날짜는 날씨를 추천 기준에서 제외해요.</small></label>
+          <label className="travel-date-label">여행 날짜<input className="travel-date-input" type="date" min={today} max={maxTravelDate} value={state.trip.startDate} onChange={(event) => { setTrip('startDate', event.target.value); setTrip('endDate', event.target.value) }} /><small className="travel-date-note">오늘부터 1년 이내 날짜를 선택할 수 있어요. 여행방은 7일 뒤 삭제되므로 확정 경로는 마이페이지에 저장해 주세요. 단기예보가 없는 날짜는 날씨를 추천 기준에서 제외해요.</small></label>
           <label>내 별명<input maxLength={20} value={hostName} onChange={(event) => setHostName(event.target.value)} placeholder="예: 민지" /></label>
           <label>함께 갈 인원
             <div className="segmented member-count">{[1, 2, 3, 4, 5, 6].map((count) => <button type="button" className={expectedMembers === count ? 'active' : ''} onClick={() => setExpectedMembers(count)} key={count}>{count}명</button>)}</div>
@@ -713,7 +789,7 @@ function categoryFromPlace(category = '') {
   return '관광'
 }
 
-function RoutePlaceEditor({ current, onSelect, onCancel }: { current: Stop; onSelect: (place: LocationSuggestion) => void; onCancel: () => void }) {
+function RoutePlaceEditor({ current, onSelect, onCancel, mode = 'replace' }: { current: Stop; onSelect: (place: LocationSuggestion) => void; onCancel: () => void; mode?: 'replace' | 'add' }) {
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<LocationSuggestion[]>([])
   const [loading, setLoading] = useState(false)
@@ -738,7 +814,8 @@ function RoutePlaceEditor({ current, onSelect, onCancel }: { current: Stop; onSe
     }, 350)
     return () => { window.clearTimeout(timer); controller.abort() }
   }, [query])
-  return <section className="route-place-editor"><div className="route-editor-title"><div><b>장소 변경</b><span>{current.title} 대신 방문할 실제 장소를 검색하세요.</span></div><button onClick={onCancel}><X size={16} /></button></div><span className="route-editor-search"><MapPin size={16} /><input autoFocus type="search" autoComplete="off" placeholder="식당·카페·숙소 이름 검색" value={query} onChange={(event) => setQuery(event.target.value)} /></span>{loading && <small>검색 중…</small>}{message && <small className="error">{message}</small>}<div className="route-editor-results">{items.map((item, index) => <button key={`${item.title}-${index}`} onClick={() => onSelect(item)}><b>{item.title}</b><span>{item.roadAddress || item.address}</span></button>)}</div></section>
+  const adding = mode === 'add' || current.title === '새 장소'
+  return <section className="route-place-editor"><div className="route-editor-title"><div><b>{adding ? '장소 추가' : '장소 변경'}</b><span>{adding ? '경로에 추가할 실제 장소를 검색하세요.' : `${current.title} 대신 방문할 실제 장소를 검색하세요.`}</span></div><button onClick={onCancel}><X size={16} /></button></div><span className="route-editor-search"><MapPin size={16} /><input autoFocus type="search" autoComplete="off" placeholder="식당·카페·숙소 이름 검색" value={query} onChange={(event) => setQuery(event.target.value)} /></span>{loading && <small>검색 중…</small>}{message && <small className="error">{message}</small>}<div className="route-editor-results">{items.map((item, index) => <button key={`${item.title}-${index}`} onClick={() => onSelect(item)}><b>{item.title}</b><span>{item.roadAddress || item.address}</span></button>)}</div></section>
 }
 
 function Room({ state, setState }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
