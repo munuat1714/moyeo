@@ -11,6 +11,7 @@ import handler from "vinext/server/app-router-entry";
 import { deleteExpiredRooms, handleRoomApi } from "./rooms";
 import { cachedPlaceSearch } from "./recommendations";
 import { publicDataStatus, syncPublicData } from "./public-data";
+import { handleAnalyticsDashboard } from "./analytics-dashboard";
 
 interface Env {
   DB: D1Database;
@@ -27,6 +28,7 @@ interface Env {
   NAVER_SEARCH_CLIENT_ID?: string;
   NAVER_SEARCH_CLIENT_SECRET?: string;
   PUBLIC_DATA_SERVICE_KEY?: string;
+  ANALYTICS_VIEW_TOKEN?: string;
 }
 
 interface ExecutionContext {
@@ -43,6 +45,9 @@ interface ExecutionContext {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    const analyticsResponse = await handleAnalyticsDashboard(request, env, url);
+    if (analyticsResponse) return analyticsResponse;
 
     if (url.pathname === "/api/events" && request.method === "POST") {
       const allowed = new Set([
