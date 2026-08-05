@@ -4,15 +4,17 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign,
-  Clock3, Coffee, Compass, Copy, ExternalLink, Home, Map, MapPin, MessageCircle,
+  Bell, Clock3, Coffee, Compass, Copy, ExternalLink, Home, Map, MapPin, MessageCircle, Plus,
   RotateCcw, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, TrainFront, Trash2,
-  UserRound, UsersRound, Utensils, Vote, WalletCards, X,
+  Settings, UserRound, UsersRound, Utensils, Vote, WalletCards, WifiOff, X,
 } from 'lucide-react'
 import { courses, demoPreferences, foods, initialState, moods, themes } from './data'
 import { aggregateThemes, allPreferencesComplete, formatPrice, recommendCourses, reorderStops, tallyVotes } from './logic'
 import { clearRoomToken, createLiveRoom, deleteLiveRoom, fetchLiveItinerary, fetchLiveRecommendations, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLiveItinerary, saveLivePreference, saveRoomToken, startLiveRoomWithCurrentMembers, submitLiveVote } from './live'
 import type { LiveSnapshot } from './live'
 import type { AppState, Course, Preference, Stop } from './types'
+import { forgetRoom, isNativeApp, notificationsEnabled, recentRooms, rememberRoom, scheduleTripNotifications, setNotificationsEnabled, shareInvite } from './mobile'
+import type { RecentRoom } from './mobile'
 import 'pretendard/dist/web/variable/pretendardvariable.css'
 import './styles.css'
 
@@ -71,11 +73,14 @@ function loadState(): AppState {
 
 export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
   const [liveRoomId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('room') ?? '')
-  if (liveRoomId) return <LiveRoomApp roomId={liveRoomId} />
+  const [appMode] = useState(() => typeof window !== 'undefined' && (new URLSearchParams(window.location.search).get('app') === '1' || isNativeApp()))
+  if (liveRoomId) return <LiveRoomApp roomId={liveRoomId} appMode={appMode} />
   const isDemo = mode === 'demo'
-  const [state, setState] = useState<AppState>(() => isDemo
+  const [state, setState] = useState<AppState>(() => isDemo && !appMode
     ? { ...initialState, trip: { ...initialState.trip }, members: initialState.members.map((member) => ({ ...member })), step: 'create' }
     : { ...loadState(), step: 'home' })
+  const [appTab, setAppTab] = useState<'home' | 'trips' | 'settings'>('home')
+  const [online, setOnline] = useState(true)
   const [selectedCourseId, setSelectedCourseId] = useState(courses[0].id)
   const [finalTab, setFinalTab] = useState<'schedule' | 'map' | 'booking'>('schedule')
   const [createStage, setCreateStage] = useState(1)
@@ -83,12 +88,51 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
   const selectedCourse = recommendedCourses.find((course) => course.id === selectedCourseId) ?? recommendedCourses[0]
 
   useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)), [state])
-  useEffect(() => { track(isDemo ? 'demo_view' : 'landing_view') }, [isDemo])
+  useEffect(() => { track(appMode ? 'demo_view' : isDemo ? 'demo_view' : 'landing_view') }, [isDemo, appMode])
+  useEffect(() => {
+    if (!appMode) return
+    let cleanup: () => void = () => undefined
+    void import('@capacitor/network').then(async ({ Network }) => {
+      setOnline((await Network.getStatus()).connected)
+      const listener = await Network.addListener('networkStatusChange', (status) => setOnline(status.connected))
+      cleanup = () => { void listener.remove() }
+    })
+    return () => cleanup()
+  }, [appMode])
+  useEffect(() => {
+    if (!appMode) return
+    let cleanup: () => void = () => undefined
+    void import('@capacitor/app').then(async ({ App: NativeApp }) => {
+      const back = await NativeApp.addListener('backButton', () => {
+        if (state.step === 'create' && createStage > 1) return setCreateStage((stage) => stage - 1)
+        if (state.step !== 'home') return update({ step: headerBack[state.step] ?? 'home' })
+        void NativeApp.exitApp()
+      })
+      const links = await NativeApp.addListener('appUrlOpen', ({ url }) => {
+        const roomId = new URL(url).searchParams.get('room') ?? url.match(/room\/([a-z0-9]+)/)?.[1]
+        if (roomId) window.location.assign(`/demo?app=1&room=${roomId}`)
+      })
+      cleanup = () => { void back.remove(); void links.remove() }
+    })
+    return () => cleanup()
+  }, [appMode, state.step, createStage])
+  useEffect(() => {
+    if (!appMode) return
+    let cleanup: () => void = () => undefined
+    void import('@capacitor/local-notifications').then(async ({ LocalNotifications }) => {
+      const listener = await LocalNotifications.addListener('localNotificationActionPerformed', ({ notification }) => {
+        const roomId = String(notification.extra?.roomId ?? '')
+        if (roomId) window.location.assign(`/demo?app=1&room=${roomId}`)
+      })
+      cleanup = () => { void listener.remove() }
+    })
+    return () => cleanup()
+  }, [appMode])
 
   const update = (patch: Partial<AppState>) => setState((current) => ({ ...current, ...patch }))
   const reset = () => {
     localStorage.removeItem(STORAGE_KEY)
-    setState({ ...initialState, trip: { ...initialState.trip }, members: initialState.members.map((member) => ({ ...member })), step: isDemo ? 'create' : 'home' })
+    setState({ ...initialState, trip: { ...initialState.trip }, members: initialState.members.map((member) => ({ ...member })), step: isDemo && !appMode ? 'create' : 'home' })
     setSelectedCourseId(courses[0].id)
     setCreateStage(1)
   }
@@ -102,11 +146,13 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
   }
 
   return (
-    <div className={`app-shell ${state.step === 'home' ? 'landing-mode' : ''}`}>
+    <div className={`app-shell ${state.step === 'home' ? 'landing-mode' : ''} ${appMode ? 'native-app-mode' : ''}`}>
+      {appMode && !online && <div className="native-offline"><WifiOff size={15} /> 인터넷 연결을 확인해 주세요.</div>}
       <header className="app-header">
         {state.step !== 'home' ? (
           <button className="icon-button" aria-label="뒤로 가기" onClick={() => {
             if (state.step === 'create' && createStage > 1) return setCreateStage((stage) => stage - 1)
+            if (appMode && state.step === 'create') return update({ step: 'home' })
             if (isDemo && state.step === 'create') return window.location.assign('/')
             update({ step: headerBack[state.step] ?? 'home' })
           }}>
@@ -114,14 +160,18 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
           </button>
         ) : <div className="brand-mark" aria-label="모두의 여행">M</div>}
         <div className="header-title">{state.step === 'home' ? '모두의 여행' : stepTitle[state.step]}</div>
-        {state.step !== 'home' && (isDemo
+        {state.step !== 'home' && (appMode
+          ? <button className="icon-button subtle" aria-label="앱 홈" onClick={() => update({ step: 'home' })}><Home size={18} /></button>
+          : isDemo
           ? <a className="demo-home-link" href="/"><Home size={15} /> 랜딩</a>
           : <button className="icon-button subtle" aria-label="처음부터 다시 시작" onClick={confirmReset}><RotateCcw size={18} /></button>)}
       </header>
 
       <main>
-        {state.step === 'home' && <HomeScreen />}
-        {state.step === 'create' && <CreateTrip state={state} setState={setState} stage={createStage} setStage={setCreateStage} />}
+        {state.step === 'home' && (appMode
+          ? <MobileHomeScreen tab={appTab} onCreate={() => { setCreateStage(1); update({ step: 'create' }) }} />
+          : <HomeScreen />)}
+        {state.step === 'create' && <CreateTrip state={state} setState={setState} stage={createStage} setStage={setCreateStage} appMode={appMode} />}
         {state.step === 'room' && <Room state={state} setState={setState} />}
         {state.step === 'preferences' && <Preferences state={state} setState={setState} />}
         {state.step === 'analysis' && <Analysis state={state} onNext={() => update({ step: 'courses' })} />}
@@ -129,6 +179,11 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' }) {
         {state.step === 'vote' && <Voting courses={recommendedCourses} state={state} setState={setState} />}
         {state.step === 'final' && <FinalTrip courses={recommendedCourses} state={state} setState={setState} tab={finalTab} setTab={setFinalTab} />}
       </main>
+      {appMode && state.step === 'home' && <nav className="native-tab-bar" aria-label="앱 메뉴">
+        <button className={appTab === 'home' ? 'active' : ''} onClick={() => setAppTab('home')}><Home size={20} /><span>홈</span></button>
+        <button className={appTab === 'trips' ? 'active' : ''} onClick={() => setAppTab('trips')}><Map size={20} /><span>내 여행</span></button>
+        <button className={appTab === 'settings' ? 'active' : ''} onClick={() => setAppTab('settings')}><Settings size={20} /><span>설정</span></button>
+      </nav>}
     </div>
   )
 }
@@ -138,7 +193,7 @@ const stepTitle: Record<AppState['step'], string> = {
   analysis: '우리 취향', courses: '추천 코스', vote: '코스 투표', final: '최종 여행',
 }
 
-function LiveRoomApp({ roomId }: { roomId: string }) {
+function LiveRoomApp({ roomId, appMode = false }: { roomId: string; appMode?: boolean }) {
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -179,6 +234,12 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
     const timer = window.setInterval(() => void refresh(true), 5000)
     return () => window.clearInterval(timer)
   }, [roomId])
+
+  useEffect(() => {
+    if (!appMode || !snapshot?.requesterMemberId) return
+    const room = { id: roomId, name: snapshot.room.name, startDate: snapshot.room.startDate, expiresAt: snapshot.room.expiresAt }
+    void rememberRoom(room).then(() => scheduleTripNotifications(room))
+  }, [appMode, roomId, snapshot?.requesterMemberId, snapshot?.room.name, snapshot?.room.startDate, snapshot?.room.expiresAt])
 
   const requester = snapshot?.members.find((member) => member.id === snapshot.requesterMemberId)
   const allJoined = Boolean(snapshot && snapshot.members.length === snapshot.room.expectedMembers)
@@ -226,6 +287,12 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
     try {
       const result = await joinLiveRoom(roomId, name.trim())
       saveRoomToken(roomId, result.token)
+      if (appMode && snapshot) {
+        const room = { id: roomId, name: snapshot.room.name, startDate: snapshot.room.startDate, expiresAt: snapshot.room.expiresAt }
+        await rememberRoom(room)
+        await setNotificationsEnabled(true)
+        await scheduleTripNotifications(room)
+      }
       await refresh()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '여행방에 참여하지 못했습니다.')
@@ -249,6 +316,7 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
 
   const copyInvite = async () => {
     const invite = `${window.location.origin}/demo?room=${roomId}`
+    if (appMode && await shareInvite(invite, snapshot?.room.name)) return
     try { await navigator.clipboard.writeText(invite) } catch { window.prompt('아래 초대 링크를 복사해 주세요.', invite) }
     setCopied(true); window.setTimeout(() => setCopied(false), 1600)
   }
@@ -259,7 +327,8 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
     try {
       await deleteLiveRoom(roomId)
       clearRoomToken(roomId)
-      window.location.assign('/demo')
+      if (appMode) await forgetRoom(roomId)
+      window.location.assign(appMode ? '/demo?app=1' : '/demo')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '여행방을 삭제하지 못했습니다.')
       setDeleting(false)
@@ -340,12 +409,12 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
   const voteCounts = Object.values(snapshot.votes).reduce<Record<string, number>>((counts, id) => ({ ...counts, [id]: (counts[id] ?? 0) + 1 }), {})
   const roomControls = <section className="room-action-icons" aria-label="여행방 관리">
     <button type="button" onClick={copyInvite} aria-label={copied ? '초대 링크 복사 완료' : '친구 초대 링크 복사'}>{copied ? <Check size={19} /> : <Copy size={19} />}<span>{copied ? '복사 완료' : '초대'}</span></button>
-    <a href="/demo" aria-label="새 여행방 만들기"><RotateCcw size={19} /><span>새 여행</span></a>
+    <a href={appMode ? '/demo?app=1' : '/demo'} aria-label="새 여행방 만들기"><RotateCcw size={19} /><span>새 여행</span></a>
     {requester?.host && <button type="button" className="delete-room-icon" disabled={deleting} onClick={removeRoom} aria-label={deleting ? '여행방 삭제 중' : '현재 여행방 삭제'}><Trash2 size={19} /><span>삭제</span></button>}
   </section>
 
   return <div className="app-shell live-room-shell">
-    <header className="app-header"><a className="icon-button" href="/demo" aria-label="데모 홈"><Home size={18} /></a><div className="header-title">실시간 여행방</div><span className="live-code" title="여행방 코드">방 코드 {roomId}</span></header>
+    <header className="app-header"><a className="icon-button" href={appMode ? '/demo?app=1' : '/demo'} aria-label={appMode ? '앱 홈' : '데모 홈'}><Home size={18} /></a><div className="header-title">{appMode ? '여행방' : '실시간 여행방'}</div><span className="live-code" title="여행방 코드">방 코드 {roomId}</span></header>
     <main className="page">
       <div className="trip-summary live-trip"><span className="eyebrow dark"><CalendarDays size={14} /> {snapshot.room.startDate}</span><h2>{snapshot.room.name}</h2><div className="trip-meta"><span>{snapshot.room.routeMode === 'open' ? <><TrainFront size={15} /> {snapshot.room.preferredArea === '상관없음' ? '부산 소권역 추천' : snapshot.room.preferredArea}</> : <><MapPin size={15} /> {snapshot.room.origin} → {snapshot.room.destination}</>}</span><span><UsersRound size={15} /> {snapshot.members.length}/{snapshot.room.expectedMembers}명</span></div></div>
       <div className="expiry-notice"><Clock3 size={16} /><span><b>{expires}</b>까지 이용할 수 있으며 이후 자동 삭제됩니다.</span></div>
@@ -369,6 +438,50 @@ function LiveRoomApp({ roomId }: { roomId: string }) {
       </>}
     </main>
   </div>
+}
+
+function MobileHomeScreen({ tab, onCreate }: { tab: 'home' | 'trips' | 'settings'; onCreate: () => void }) {
+  const [rooms, setRooms] = useState<RecentRoom[]>([])
+  const [roomCode, setRoomCode] = useState('')
+  const [notificationOn, setNotificationOn] = useState(false)
+  const [loadingRooms, setLoadingRooms] = useState(true)
+  useEffect(() => {
+    void recentRooms().then((items) => { setRooms(items); setLoadingRooms(false) })
+    void notificationsEnabled().then(setNotificationOn)
+  }, [])
+  const openRoom = (roomId: string) => window.location.assign(`/demo?app=1&room=${roomId}`)
+  const joinRoom = () => {
+    const code = roomCode.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+    if (code) openRoom(code)
+  }
+  if (tab === 'settings') return <section className="native-home-page native-settings-page">
+    <div className="native-page-heading"><span>APP SETTINGS</span><h1>설정</h1><p>필요한 알림만 받고 여행 데이터는 기기에 최소한으로 보관해요.</p></div>
+    <div className="native-setting-card"><div><Bell size={20} /><span><b>여행 알림</b><small>여행 전날과 여행방 삭제 하루 전에 알려드려요.</small></span></div><button role="switch" aria-checked={notificationOn} className={notificationOn ? 'active' : ''} onClick={() => void setNotificationsEnabled(!notificationOn).then(setNotificationOn)}>{notificationOn ? '켜짐' : '꺼짐'}</button></div>
+    <div className="native-setting-card static"><div><ShieldCheck size={20} /><span><b>데이터 보관</b><small>여행방은 생성 후 7일 뒤 삭제되며 계정이나 연락처를 수집하지 않아요.</small></span></div></div>
+    <div className="native-app-version">모두의 여행 v1.0 · Android 테스트</div>
+  </section>
+
+  if (tab === 'trips') return <section className="native-home-page">
+    <div className="native-page-heading"><span>MY TRIPS</span><h1>내 여행</h1><p>이 기기에서 만들거나 참여한 여행방이에요.</p></div>
+    <RecentRoomList rooms={rooms} loading={loadingRooms} onOpen={openRoom} />
+    <button className="native-create-secondary" onClick={onCreate}><Plus size={18} /> 새 여행 만들기</button>
+  </section>
+
+  return <section className="native-home-page">
+    <div className="native-welcome"><span>모두의 여행</span><h1>우리 취향으로<br />부산 하루 여행</h1><p>친구와 취향을 모으고 가까운 실제 장소로 여행 코스를 완성해요.</p></div>
+    <div className="native-home-actions">
+      <button className="native-create-button" onClick={onCreate}><span><Plus size={23} /></span><div><b>새 여행 만들기</b><small>출발지 또는 부산 권역부터 시작해요</small></div><ChevronRight size={20} /></button>
+      <div className="native-join-card"><div><b>초대 코드로 참여</b><small>친구에게 받은 방 코드를 입력해 주세요.</small></div><div><input value={roomCode} maxLength={12} autoCapitalize="none" placeholder="방 코드" onChange={(event) => setRoomCode(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') joinRoom() }} /><button disabled={!roomCode.trim()} onClick={joinRoom}>참여</button></div></div>
+    </div>
+    <div className="native-recent-heading"><b>최근 여행</b>{rooms.length > 0 && <span>{rooms.length}개</span>}</div>
+    <RecentRoomList rooms={rooms.slice(0, 2)} loading={loadingRooms} onOpen={openRoom} compact />
+  </section>
+}
+
+function RecentRoomList({ rooms, loading, onOpen, compact = false }: { rooms: RecentRoom[]; loading: boolean; onOpen: (id: string) => void; compact?: boolean }) {
+  if (loading) return <div className="native-room-empty"><Sparkles size={20} /><span>여행방을 확인하고 있어요.</span></div>
+  if (!rooms.length) return <div className="native-room-empty"><Map size={22} /><b>아직 저장된 여행이 없어요</b><span>여행방을 만들거나 초대 코드로 참여해 보세요.</span></div>
+  return <div className={`native-room-list ${compact ? 'compact' : ''}`}>{rooms.map((room) => <button key={room.id} onClick={() => onOpen(room.id)}><span className="native-room-date"><CalendarDays size={15} />{room.startDate.slice(5).replace('-', '.')}</span><span><b>{room.name}</b><small>방 코드 {room.id} · {new Date(room.expiresAt * 1000).toLocaleDateString('ko-KR')} 삭제</small></span><ChevronRight size={19} /></button>)}</div>
 }
 
 function HomeScreen() {
@@ -412,7 +525,7 @@ function HomeScreen() {
   )
 }
 
-function CreateTrip({ state, setState, stage, setStage }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>>; stage: number; setStage: React.Dispatch<React.SetStateAction<number>> }) {
+function CreateTrip({ state, setState, stage, setStage, appMode = false }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>>; stage: number; setStage: React.Dispatch<React.SetStateAction<number>>; appMode?: boolean }) {
   const setTrip = (field: string, value: string) => setState((s) => ({ ...s, trip: { ...s.trip, [field]: value } }))
   const [hostName, setHostName] = useState('민지')
   const [expectedMembers, setExpectedMembers] = useState(4)
@@ -438,8 +551,14 @@ function CreateTrip({ state, setState, stage, setStage }: { state: AppState; set
     try {
       const result = await createLiveRoom(state.trip, hostName, expectedMembers)
       saveRoomToken(result.roomId, result.token)
+      if (appMode) {
+        const room = { id: result.roomId, name: state.trip.name, startDate: state.trip.startDate, expiresAt: result.expiresAt }
+        await rememberRoom(room)
+        await setNotificationsEnabled(true)
+        await scheduleTripNotifications(room)
+      }
       track('room_created')
-      window.location.assign(`/demo?room=${result.roomId}`)
+      window.location.assign(`/demo?${appMode ? 'app=1&' : ''}room=${result.roomId}`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '여행방을 만들지 못했습니다.')
       setCreating(false)

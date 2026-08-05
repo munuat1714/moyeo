@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: '모두의 여행',
   webDir: 'android-web',
   server: {
-    url: 'https://moyeo.moyo-ra.workers.dev/demo',
+    url: 'https://moyeo.moyo-ra.workers.dev/demo?app=1',
     cleartext: false,
     androidScheme: 'https',
   },
