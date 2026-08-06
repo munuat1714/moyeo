@@ -583,6 +583,10 @@ function HomeScreen() {
   return (
     <div className="simple-landing">
       <section className="simple-hero">
+        <div className="landing-brand" aria-label="모행">
+          <img src="/social/moyeo-profile.png" alt="" />
+          <span><b>모행</b><small>MOHANG</small></span>
+        </div>
         <span className="eyebrow"><Sparkles size={14} /> 친구 취향으로 완성하는 여행</span>
         <h1>여행 계획,<br /><em>모두의 취향</em>에서 시작해요.</h1>
         <p>각자 가고 싶은 곳과 여행 스타일을 고르면, 친구 모두가 만족할 코스를 정리하고 투표로 결정하는 여행 계획 서비스입니다.</p>
@@ -608,7 +612,7 @@ function HomeScreen() {
         {interest && <div className="survey-thanks" role="status"><Check size={16} /><span>답변해주셔서 고마워요. 개인을 식별하지 않는 합계로만 반영됩니다.</span></div>}
       </section>
 
-      <footer className="simple-footer"><div><span className="brand-mark">M</span><b>모행</b></div><p>친구들의 취향을 모아 완성하는 여행 계획 서비스</p><small>© 2026 모행 팀</small></footer>
+      <footer className="simple-footer"><div><img className="footer-brand-logo" src="/social/moyeo-profile.png" alt="" /><b>모행</b></div><p>친구들의 취향을 모아 완성하는 여행 계획 서비스</p><small>© 2026 모행 팀</small></footer>
     </div>
   )
 }

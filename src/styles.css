@@ -193,6 +193,11 @@ input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,79,.
 
 .simple-landing { min-height: calc(100vh - 64px); background: #fff; }
 .simple-hero { max-width: 980px; margin: 0 auto; padding: 96px 40px 70px; text-align: center; }
+.landing-brand { width: max-content; margin: 0 auto 28px; display: flex; align-items: center; gap: 12px; text-align: left; }
+.landing-brand img { width: 54px; height: 54px; display: block; border-radius: 16px; object-fit: cover; }
+.landing-brand span { display: grid; gap: 1px; }
+.landing-brand b { color: var(--ink); font-size: 23px; line-height: 1.1; letter-spacing: -.8px; }
+.landing-brand small { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: 2px; }
 .simple-hero .eyebrow { justify-content: center; }
 .simple-hero h1 { margin: 22px 0 20px; color: var(--ink); font-size: clamp(46px, 6vw, 72px); line-height: 1.08; letter-spacing: -4px; }
 .simple-hero h1 em { color: var(--green); font-style: normal; }
@@ -221,7 +226,7 @@ input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,79,.
 
 .drag-move-guide { margin: 0 0 14px 49px; padding: 12px; display: flex; align-items: flex-start; gap: 8px; border-radius: 12px; color: var(--green); background: var(--green-soft); }.drag-move-guide > svg { flex: none; }.drag-move-guide span { display: grid; gap: 3px; }.drag-move-guide b { font-size: 12px; }.drag-move-guide small { color: var(--muted); font-size: 11px; line-height: 1.45; }
 .stop-tools .drag-handle { width: 40px; height: 40px; margin: -6px -6px -6px 0; color: var(--green); background: var(--green-soft); cursor: grab; touch-action: none; user-select: none; }.stop-tools .drag-handle:active { cursor: grabbing; }.timeline-stop.dragging .stop-card { opacity: .65; border-color: var(--green); }.timeline-stop.drag-over .stop-card { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-soft); transform: translateY(2px); }
-.simple-footer { max-width: 980px; margin: 0 auto; padding: 30px 40px 42px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 24px; color: var(--muted); border-top: 1px solid var(--line); font-size: 11px; }.simple-footer > div { display: flex; align-items: center; gap: 9px; color: var(--ink); }.simple-footer p { margin: 0; }
+.simple-footer { max-width: 980px; margin: 0 auto; padding: 30px 40px 42px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 24px; color: var(--muted); border-top: 1px solid var(--line); font-size: 11px; }.simple-footer > div { display: flex; align-items: center; gap: 9px; color: var(--ink); }.simple-footer p { margin: 0; }.footer-brand-logo { width: 32px; height: 32px; display: block; border-radius: 9px; object-fit: cover; }
 
 .landing-mode { width: 100%; max-width: none; background: #fff; box-shadow: none; }
 .landing-mode .app-header { max-width: 1180px; margin: 0 auto; background: rgba(255,255,255,.9); }
@@ -357,6 +362,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 @media (max-width: 430px) {
   .simple-hero { padding-top: 48px; }
+  .landing-brand { margin-bottom: 24px; }.landing-brand img { width: 48px; height: 48px; border-radius: 14px; }.landing-brand b { font-size: 21px; }
   .simple-hero h1 { font-size: 39px; line-height: 1.12; }
   .simple-hero > p { font-size: 15px; line-height: 1.7; }
   .concept-flow small { font-size: 12px; }
