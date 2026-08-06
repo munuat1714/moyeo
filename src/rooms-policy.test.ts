@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ROOM_TTL_SECONDS, isoDate, roomExpiresAt, validItinerary, validPreference } from '../worker/rooms'
+import { MAX_TRAVEL_PLAN_DAYS, ROOM_TTL_SECONDS, isoDate, roomExpiresAt, validItinerary, validPreference, validTravelDate } from '../worker/rooms'
 
 describe('여행방 만료 정책', () => {
   it('생성 시각으로부터 정확히 7일 뒤 만료한다', () => {
@@ -12,6 +12,14 @@ describe('여행방 만료 정책', () => {
     expect(isoDate('2026-08-05')).toBe(true)
     expect(isoDate('2026-02-30')).toBe(false)
     expect(isoDate('20260805')).toBe(false)
+  })
+
+  it('오늘부터 365일 뒤까지 여행을 계획할 수 있다', () => {
+    const now = new Date('2026-08-06T06:00:00Z')
+    expect(MAX_TRAVEL_PLAN_DAYS).toBe(365)
+    expect(validTravelDate('2026-08-14', now)).toBe(true)
+    expect(validTravelDate('2027-08-06', now)).toBe(true)
+    expect(validTravelDate('2027-08-07', now)).toBe(false)
   })
 
   it('취향과 일정의 크기 및 필수 필드를 검증한다', () => {

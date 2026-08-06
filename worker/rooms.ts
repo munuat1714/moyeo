@@ -3,6 +3,7 @@ import type { SearchCredentials } from './recommendations';
 
 export const ROOM_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const roomExpiresAt = (createdAt: number) => createdAt + ROOM_TTL_SECONDS;
+export const MAX_TRAVEL_PLAN_DAYS = 365;
 const COLORS = ['#ff6b4a', '#3f7cff', '#9b6bdf', '#18a778', '#e69524', '#d24b78'];
 
 type RoomRow = {
@@ -43,7 +44,7 @@ export function validTravelDate(value: string, now = new Date()) {
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   const today = Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate());
   const selected = Date.parse(`${value}T00:00:00Z`);
-  return selected >= today && selected <= today + 7 * 24 * 60 * 60 * 1000;
+  return selected >= today && selected <= today + MAX_TRAVEL_PLAN_DAYS * 24 * 60 * 60 * 1000;
 }
 
 function validStringArray(value: unknown, maxItems: number) {

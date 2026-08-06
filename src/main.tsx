@@ -627,12 +627,14 @@ function CreateTrip({ state, setState, stage, setStage, appMode = false, nativeM
   const [destinationSelected, setDestinationSelected] = useState(false)
   const openAreas = ['상관없음', '서면·전포', '광안리·수영', '해운대·청사포', '남포·광복']
   const openRoute = state.trip.routeMode === 'open'
+  const maxTravelPlanDays = 365
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   const maxTravelDate = (() => {
     const date = new Date(`${today}T00:00:00Z`)
-    date.setUTCFullYear(date.getUTCFullYear() + 1)
+    date.setUTCDate(date.getUTCDate() + maxTravelPlanDays)
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
   })()
+  const maxTravelDateLabel = new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${maxTravelDate}T00:00:00Z`))
   const validDate = state.trip.startDate >= today && state.trip.startDate <= maxTravelDate
   const stageLabels = ['코스 추천 방식', openRoute ? '선호 권역' : '여행 경로', '여행방 정보', '입력 내용 확인']
   const canContinue = stage === 1
@@ -704,7 +706,7 @@ function CreateTrip({ state, setState, stage, setStage, appMode = false, nativeM
         <div className="section-heading"><h2>여행방 정보를 알려주세요</h2><p>친구들이 알아보기 쉬운 이름과 여행 날짜를 정해 주세요.</p></div>
         <div className="form-card">
           <label>여행방 이름<input value={state.trip.name} onChange={(event) => setTrip('name', event.target.value)} placeholder="예: 우리들의 부산 여행" /></label>
-          <label className="travel-date-label">여행 날짜<input className="travel-date-input" type="date" min={today} max={maxTravelDate} value={state.trip.startDate} onChange={(event) => { setTrip('startDate', event.target.value); setTrip('endDate', event.target.value) }} /><small className="travel-date-note">오늘부터 1년 이내 날짜를 선택할 수 있어요. 여행방은 7일 뒤 삭제되므로 확정 경로는 마이페이지에 저장해 주세요. 단기예보가 없는 날짜는 날씨를 추천 기준에서 제외해요.</small></label>
+          <label className="travel-date-label">여행 날짜<input className="travel-date-input" type="date" min={today} max={maxTravelDate} value={state.trip.startDate} onChange={(event) => { setTrip('startDate', event.target.value); setTrip('endDate', event.target.value) }} /><span className="travel-date-limit"><CalendarDays size={14} /> 최대 계획 가능 날짜 <b>{maxTravelDateLabel}</b></span><small className="travel-date-note">오늘부터 365일 뒤까지 계획할 수 있어요. 여행방은 생성 후 7일 뒤 삭제되므로 확정 경로는 마이페이지에 저장해 주세요. 단기예보가 없는 날짜는 날씨를 추천 기준에서 제외해요.</small></label>
           <label>내 별명<input maxLength={20} value={hostName} onChange={(event) => setHostName(event.target.value)} placeholder="예: 민지" /></label>
           <label>함께 갈 인원
             <div className="segmented member-count">{[1, 2, 3, 4, 5, 6].map((count) => <button type="button" className={expectedMembers === count ? 'active' : ''} onClick={() => setExpectedMembers(count)} key={count}>{count}명</button>)}</div>

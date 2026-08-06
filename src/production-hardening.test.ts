@@ -10,11 +10,12 @@ describe('public API response parsing', () => {
 })
 
 describe('travel date policy', () => {
-  it('allows only today through seven days later in Korea', () => {
+  it('allows today through 365 days later in Korea', () => {
     const now = new Date('2026-08-05T03:00:00Z')
     expect(validTravelDate('2026-08-05', now)).toBe(true)
     expect(validTravelDate('2026-08-12', now)).toBe(true)
+    expect(validTravelDate('2027-08-05', now)).toBe(true)
     expect(validTravelDate('2026-08-04', now)).toBe(false)
-    expect(validTravelDate('2026-08-13', now)).toBe(false)
+    expect(validTravelDate('2027-08-06', now)).toBe(false)
   })
 })
