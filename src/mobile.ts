@@ -81,32 +81,50 @@ export async function notificationsEnabled() {
 }
 
 export async function setNotificationsEnabled(enabled: boolean) {
-  if (enabled) {
-    const permission = await LocalNotifications.requestPermissions()
-    enabled = permission.display === 'granted'
+  try {
+    if (enabled) {
+      const permission = await LocalNotifications.requestPermissions()
+      enabled = permission.display === 'granted'
+    }
+    await Preferences.set({ key: NOTIFICATION_KEY, value: String(enabled) })
+    if (!enabled) {
+      const pending = (await LocalNotifications.getPending()).notifications
+      if (pending.length > 0) await LocalNotifications.cancel({ notifications: pending })
+    }
+    return enabled
+  } catch {
+    await Preferences.set({ key: NOTIFICATION_KEY, value: 'false' }).catch(() => undefined)
+    return false
   }
-  await Preferences.set({ key: NOTIFICATION_KEY, value: String(enabled) })
-  if (!enabled) await LocalNotifications.cancel({ notifications: (await LocalNotifications.getPending()).notifications })
-  return enabled
 }
 
 const notificationId = (roomId: string, offset: number) => Math.abs([...roomId].reduce((hash, char) => ((hash * 31) + char.charCodeAt(0)) | 0, offset)) % 2_000_000_000
 
 export async function scheduleTripNotifications(room: Omit<RecentRoom, 'savedAt'>) {
-  if (!isNativeApp() || !await notificationsEnabled()) return
-  const notifications: Array<{ id: number; title: string; body: string; schedule: { at: Date }; extra: { roomId: string } }> = []
-  const travelAt = new Date(`${room.startDate}T09:00:00+09:00`)
-  const dayBefore = new Date(travelAt.getTime() - 24 * 60 * 60 * 1000)
-  if (dayBefore.getTime() > Date.now()) notifications.push({
-    id: notificationId(room.id, 11), title: '내일 여행이 시작돼요', body: `${room.name}의 확정 경로를 확인해 보세요.`,
-    schedule: { at: dayBefore }, extra: { roomId: room.id },
-  })
-  const expiryAt = new Date((room.expiresAt - 24 * 60 * 60) * 1000)
-  if (expiryAt.getTime() > Date.now()) notifications.push({
-    id: notificationId(room.id, 29), title: '여행방이 하루 뒤 삭제돼요', body: `${room.name}의 일정을 미리 확인하거나 복사해 주세요.`,
-    schedule: { at: expiryAt }, extra: { roomId: room.id },
-  })
-  if (notifications.length) await LocalNotifications.schedule({ notifications })
+  if (!isNativeApp() || !await notificationsEnabled()) return false
+  try {
+    const permission = await LocalNotifications.checkPermissions()
+    if (permission.display !== 'granted') {
+      await Preferences.set({ key: NOTIFICATION_KEY, value: 'false' })
+      return false
+    }
+    const notifications: Array<{ id: number; title: string; body: string; schedule: { at: Date }; extra: { roomId: string } }> = []
+    const travelAt = new Date(`${room.startDate}T09:00:00+09:00`)
+    const dayBefore = new Date(travelAt.getTime() - 24 * 60 * 60 * 1000)
+    if (dayBefore.getTime() > Date.now()) notifications.push({
+      id: notificationId(room.id, 11), title: '내일 여행이 시작돼요', body: `${room.name}의 확정 경로를 확인해 보세요.`,
+      schedule: { at: dayBefore }, extra: { roomId: room.id },
+    })
+    const expiryAt = new Date((room.expiresAt - 24 * 60 * 60) * 1000)
+    if (expiryAt.getTime() > Date.now()) notifications.push({
+      id: notificationId(room.id, 29), title: '여행방이 하루 뒤 삭제돼요', body: `${room.name}의 일정을 미리 확인하거나 복사해 주세요.`,
+      schedule: { at: expiryAt }, extra: { roomId: room.id },
+    })
+    if (notifications.length > 0) await LocalNotifications.schedule({ notifications })
+    return true
+  } catch {
+    return false
+  }
 }
 
 export async function shareInvite(url: string, roomName?: string) {
