@@ -10,6 +10,7 @@
     "test:watch": "vitest",
     "android:sync": "cap sync android",
     "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
+    "android:aab": "npm run android:sync && cd android && gradlew.bat bundleRelease",
     "preview": "vinext start",
     "start": "vinext start"
   },
