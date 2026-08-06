@@ -111,7 +111,7 @@ export async function scheduleTripNotifications(room: Omit<RecentRoom, 'savedAt'
 
 export async function shareInvite(url: string, roomName?: string) {
   if (isNativeApp()) {
-    await Share.share({ title: roomName ?? '모두의 여행', text: '같이 여행 코스를 골라봐요.', url, dialogTitle: '여행방 초대하기' })
+    await Share.share({ title: roomName ?? '모행', text: '같이 여행 코스를 골라봐요.', url, dialogTitle: '여행방 초대하기' })
     return true
   }
   return false

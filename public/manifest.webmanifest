@@ -1,7 +1,7 @@
 {
   "id": "/app",
-  "name": "모두의 여행",
-  "short_name": "모두의 여행",
+  "name": "모행",
+  "short_name": "모행",
   "description": "친구들의 취향을 모아 부산 당일치기 여행 코스를 만드는 서비스",
   "start_url": "/app",
   "scope": "/",

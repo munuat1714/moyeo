@@ -1,4 +1,4 @@
-# 모두의 여행 MVP
+# 모행 MVP
 
 친구들이 각자 취향을 입력하면 그룹 공통 취향을 분석해 부산 당일치기 코스 3개를 추천하고, 투표로 최종 일정을 확정하는 모바일 우선 서비스입니다. 공식 관광정보 기반의 부산 장소와 선택적 네이버 지도·지역 검색 연동을 사용합니다.
 
@@ -40,7 +40,7 @@ PowerShell 실행 정책으로 `npm.ps1`이 차단되는 환경에서는 `npm.cm
 
 초기 서비스는 네이버 Directions를 호출하지 않아 불필요한 과금을 피합니다. 네이버 Maps의 무료 이용량은 대표 계정 등 조건이 있으므로 콘솔에서 사용량 제한과 알림을 먼저 설정하세요.
 
-이 프로젝트의 배포 대상은 Cloudflare의 `Mirror Erigeron` 계정에 있는 `moyeo` Worker입니다. `wrangler.jsonc`의 `account_id`도 해당 계정으로 고정되어 있으므로, Variables and Secrets와 배포 설정은 반드시 이 계정에서 관리합니다.
+이 프로젝트의 배포 대상은 Cloudflare의 `Mirror Erigeron` 계정에 있는 `mohang` Worker입니다. `wrangler.jsonc`의 `account_id`도 해당 계정으로 고정되어 있으므로, Variables and Secrets와 배포 설정은 반드시 이 계정에서 관리합니다.
 
 Cloudflare Worker의 Variables and Secrets에 다음 값을 등록합니다.
 
@@ -54,7 +54,7 @@ NAVER_SEARCH_CLIENT_SECRET    # 네이버 개발자 센터 검색 API Client Sec
 Web Dynamic Map Application의 허용 URL에는 다음 주소를 등록합니다.
 
 ```text
-https://moyeo.moyo-ra.workers.dev
+https://mohang.moyo-ra.workers.dev
 http://localhost:3000
 ```
 
@@ -68,7 +68,7 @@ http://localhost:3000
 npx.cmd wrangler secret put PUBLIC_DATA_SERVICE_KEY
 ```
 
-Cloudflare 대시보드에서는 `moyeo` Worker의 **Settings → Variables and Secrets**에 다음 이름으로 등록합니다.
+Cloudflare 대시보드에서는 `mohang` Worker의 **Settings → Variables and Secrets**에 다음 이름으로 등록합니다.
 
 ```text
 PUBLIC_DATA_SERVICE_KEY      # Secret, 공공데이터포털 일반 인증키

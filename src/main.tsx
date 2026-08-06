@@ -163,8 +163,8 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service
           }}>
             <ArrowLeft size={21} />
           </button>
-        ) : <div className="brand-mark" aria-label="모두의 여행">M</div>}
-        <div className="header-title">{state.step === 'home' ? '모두의 여행' : stepTitle[state.step]}</div>
+        ) : <div className="brand-mark" aria-label="모행">M</div>}
+        <div className="header-title">{state.step === 'home' ? '모행' : stepTitle[state.step]}</div>
         {state.step !== 'home' && (appMode
           ? <button className="icon-button subtle" aria-label="앱 홈" onClick={() => update({ step: 'home' })}><Home size={18} /></button>
           : isDemo
@@ -194,7 +194,7 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service
 }
 
 const stepTitle: Record<AppState['step'], string> = {
-  home: '모두의 여행', create: '여행 만들기', room: '여행방', preferences: '내 취향',
+  home: '모행', create: '여행 만들기', room: '여행방', preferences: '내 취향',
   analysis: '우리 취향', courses: '추천 코스', vote: '코스 투표', final: '최종 여행',
 }
 
@@ -533,7 +533,7 @@ function MobileHomeScreen({ tab, nativeMode, onCreate }: { tab: 'home' | 'my' | 
     {nativeMode ? <div className="native-setting-card"><div><Bell size={20} /><span><b>여행 알림</b><small>여행 전날과 여행방 삭제 하루 전에 알려드려요.</small></span></div><button role="switch" aria-checked={notificationOn} className={notificationOn ? 'active' : ''} onClick={() => void setNotificationsEnabled(!notificationOn).then(setNotificationOn)}>{notificationOn ? '켜짐' : '꺼짐'}</button></div>
       : <div className="native-setting-card static install-guide"><div><Plus size={20} /><span><b>iPhone 홈 화면에 설치</b><small>Safari의 공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하면 앱처럼 실행할 수 있어요.</small></span></div></div>}
     <div className="native-setting-card static"><div><ShieldCheck size={20} /><span><b>데이터 보관</b><small>여행방은 생성 후 7일 뒤 삭제되며 계정이나 연락처를 수집하지 않아요.</small></span></div></div>
-    <div className="native-app-version">모두의 여행 v1.0 · {nativeMode ? 'Android 앱' : '웹앱'}</div>
+    <div className="native-app-version">모행 v1.0 · {nativeMode ? 'Android 앱' : '웹앱'}</div>
   </section>
 
   if (tab === 'my') return <section className="native-home-page my-page">
@@ -546,7 +546,7 @@ function MobileHomeScreen({ tab, nativeMode, onCreate }: { tab: 'home' | 'my' | 
   </section>
 
   return <section className="native-home-page">
-    <div className="native-welcome"><span>모두의 여행</span><h1>우리 취향으로<br />부산 하루 여행</h1><p>친구와 취향을 모으고 가까운 실제 장소로 여행 코스를 완성해요.</p></div>
+    <div className="native-welcome"><span>모행</span><h1>우리 취향으로<br />부산 하루 여행</h1><p>친구와 취향을 모으고 가까운 실제 장소로 여행 코스를 완성해요.</p></div>
     <div className="native-home-actions">
       <button className="native-create-button" onClick={onCreate}><span><Plus size={23} /></span><div><b>새 여행 만들기</b><small>출발지 또는 부산 권역부터 시작해요</small></div><ChevronRight size={20} /></button>
       <div className="native-join-card"><div><b>초대 코드로 참여</b><small>친구에게 받은 방 코드를 입력해 주세요.</small></div><div><input value={roomCode} maxLength={12} autoCapitalize="none" placeholder="방 코드" onChange={(event) => setRoomCode(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') joinRoom() }} /><button disabled={!roomCode.trim()} onClick={joinRoom}>참여</button></div></div>
@@ -587,10 +587,10 @@ function HomeScreen() {
         <h1>여행 계획,<br /><em>모두의 취향</em>에서 시작해요.</h1>
         <p>각자 가고 싶은 곳과 여행 스타일을 고르면, 친구 모두가 만족할 코스를 정리하고 투표로 결정하는 여행 계획 서비스입니다.</p>
         <div className="landing-entry-actions">
-          <a className="hero-demo-link" href="/app" onClick={() => track('landing_app_click')}>모두의 여행 시작하기 <ArrowRight size={18} /></a>
+          <a className="hero-demo-link" href="/app" onClick={() => track('landing_app_click')}>모행 시작하기 <ArrowRight size={18} /></a>
           <a className="landing-demo-secondary" href="/demo" onClick={() => track('landing_demo_click')}>개인정보 없이 데모 체험하기</a>
         </div>
-        <div className="concept-flow" aria-label="모두의 여행 이용 개요">
+        <div className="concept-flow" aria-label="모행 이용 개요">
           <article><span><UsersRound size={20} /></span><div><b>취향을 모으고</b><small>맛집·카페·사진·문화 등 각자의 선택</small></div></article>
           <i><ArrowRight size={17} /></i>
           <article><span><Sparkles size={20} /></span><div><b>코스를 만들고</b><small>공통점과 차이를 반영한 여행 일정</small></div></article>
@@ -608,7 +608,7 @@ function HomeScreen() {
         {interest && <div className="survey-thanks" role="status"><Check size={16} /><span>답변해주셔서 고마워요. 개인을 식별하지 않는 합계로만 반영됩니다.</span></div>}
       </section>
 
-      <footer className="simple-footer"><div><span className="brand-mark">M</span><b>모두의 여행</b></div><p>친구들의 취향을 모아 완성하는 여행 계획 서비스</p><small>© 2026 모두의 여행 팀</small></footer>
+      <footer className="simple-footer"><div><span className="brand-mark">M</span><b>모행</b></div><p>친구들의 취향을 모아 완성하는 여행 계획 서비스</p><small>© 2026 모행 팀</small></footer>
     </div>
   )
 }
@@ -1044,7 +1044,7 @@ function FinalTrip({ courses, state, setState, tab, setTab }: { courses: Course[
         </section>
         <section className="interest-card">
           <span className="eyebrow dark"><Sparkles size={14} /> 다음 단계에 함께해요</span>
-          <h3>모두의 여행을 더 먼저 만나보세요.</h3><p>연락처를 받지 않고 관심 의사만 확인합니다. 정식 모집 링크가 준비되면 이 화면에 연결할 예정이에요.</p>
+          <h3>모행을 더 먼저 만나보세요.</h3><p>연락처를 받지 않고 관심 의사만 확인합니다. 정식 모집 링크가 준비되면 이 화면에 연결할 예정이에요.</p>
           <div className="interest-actions"><button onClick={() => chooseInterest('beta')}><ExternalLink size={17} /> 베타 참여에 관심 있어요</button><button onClick={() => chooseInterest('interview')}><MessageCircle size={17} /> 15분 인터뷰에 관심 있어요</button></div>
           {interest && <div className="interest-confirm"><Check size={16} /><span>{interest === 'beta' ? '베타 참여' : '인터뷰 참여'} 관심을 익명 합계에 반영했어요.</span></div>}
           <small><ShieldCheck size={14} /> 여행 정보와 응답은 현재 사용 중인 브라우저에만 저장됩니다.</small>

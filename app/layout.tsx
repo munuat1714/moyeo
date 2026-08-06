@@ -5,7 +5,7 @@ import '../src/styles.css'
 import { PwaRegistration } from '../src/pwa-registration'
 
 const baseMetadata = {
-  title: '모두의 여행 | 친구 취향으로 완성하는 여행',
+  title: '모행 | 친구 취향으로 완성하는 여행',
   description: '각자 취향을 고르면 모두가 좋아할 1박 2일 코스를 비교하고 투표로 결정하는 여행 큐레이션 MVP',
 }
 
@@ -17,10 +17,10 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     ...baseMetadata,
     manifest: '/manifest.webmanifest',
-    applicationName: '모두의 여행',
-    appleWebApp: { capable: true, title: '모두의 여행', statusBarStyle: 'default' },
+    applicationName: '모행',
+    appleWebApp: { capable: true, title: '모행', statusBarStyle: 'default' },
     icons: { icon: '/icons/moyeo-192.png', apple: '/icons/moyeo-192.png' },
-    openGraph: { ...baseMetadata, type: 'website', locale: 'ko_KR', images: [{ url: imageUrl, width: 1942, height: 809, alt: '모두의 여행 서비스 소개' }] },
+    openGraph: { ...baseMetadata, type: 'website', locale: 'ko_KR', images: [{ url: imageUrl, width: 1024, height: 500, alt: '모행 서비스 소개' }] },
     twitter: { card: 'summary_large_image', ...baseMetadata, images: [imageUrl] },
   }
 }

@@ -2,10 +2,10 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.moyeotrip.app',
-  appName: '모두의 여행',
+  appName: '모행',
   webDir: 'android-web',
   server: {
-    url: 'https://moyeo.moyo-ra.workers.dev/app',
+    url: 'https://mohang.moyo-ra.workers.dev/app',
     cleartext: false,
     androidScheme: 'https',
   },
