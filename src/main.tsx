@@ -163,7 +163,7 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service
           }}>
             <ArrowLeft size={21} />
           </button>
-        ) : <div className="brand-mark" aria-label="모행">M</div>}
+        ) : <img className="brand-logo" src="/social/moyeo-profile.png" alt="모행" />}
         <div className="header-title">{state.step === 'home' ? '모행' : stepTitle[state.step]}</div>
         {state.step !== 'home' && (appMode
           ? <button className="icon-button subtle" aria-label="앱 홈" onClick={() => update({ step: 'home' })}><Home size={18} /></button>

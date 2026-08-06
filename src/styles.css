@@ -37,6 +37,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 }
 .header-title { font-weight: 800; letter-spacing: -.4px; }
 .brand-mark { width: 31px; height: 31px; border-radius: 10px 10px 15px 10px; background: var(--coral); color: white; display: grid; place-items: center; font-weight: 800; transform: rotate(-5deg); }
+.brand-logo { width: 34px; height: 34px; display: block; border-radius: 10px; object-fit: cover; }
 .icon-button { width: 40px; height: 40px; background: transparent; border-radius: 12px; display: grid; place-items: center; }
 .icon-button:hover { background: #eef0e9; }
 .icon-button.subtle { color: #9ca198; }
