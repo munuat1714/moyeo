@@ -150,19 +150,36 @@ export default {
         "x-ncp-apigw-api-key-id": env.NAVER_MAPS_CLIENT_ID,
         "x-ncp-apigw-api-key": env.NAVER_MAPS_CLIENT_SECRET,
       } });
-      if (!response.ok) {
+      let result: { path: number[][]; distanceMeters: number; durationMinutes: number; basis: string } | null = null;
+      if (response.ok) {
+        const data = await response.json<any>();
+        const route = data.route?.traavoidcaronly?.[0] ?? data.route?.traoptimal?.[0];
+        if (route?.path?.length) result = {
+          path: route.path.map((point: number[]) => [Number(point[0]), Number(point[1])]),
+          distanceMeters: Number(route.summary?.distance ?? 0),
+          durationMinutes: Math.max(1, Math.round(Number(route.summary?.duration ?? 0) / 60000)),
+          basis: "NAVER_DIRECTIONS_ROAD",
+        };
+      } else {
         console.error("naver-directions-error", { status: response.status, detail: (await response.text()).slice(0, 300) });
-        return secured(Response.json({ error: "실제 도로 경로를 불러오지 못했습니다." }, { status: 502 }));
       }
-      const data = await response.json<any>();
-      const route = data.route?.traavoidcaronly?.[0] ?? data.route?.traoptimal?.[0];
-      if (!route?.path?.length) return secured(Response.json({ error: "사용 가능한 도로 경로가 없습니다." }, { status: 404 }));
-      const result = {
-        path: route.path.map((point: number[]) => [Number(point[0]), Number(point[1])]),
-        distanceMeters: Number(route.summary?.distance ?? 0),
-        durationMinutes: Math.max(1, Math.round(Number(route.summary?.duration ?? 0) / 60000)),
-        basis: "NAVER_DIRECTIONS_ROAD",
-      };
+      if (!result) {
+        const osrmCoordinates = points.map((point) => point.join(",")).join(";");
+        const osrm = await fetch(`https://router.project-osrm.org/route/v1/driving/${osrmCoordinates}?overview=full&geometries=geojson&steps=false`, {
+          headers: { "User-Agent": "Mohang/1.0 (https://mohang.moyo-ra.workers.dev)" },
+        });
+        if (osrm.ok) {
+          const data = await osrm.json<any>();
+          const route = data.routes?.[0];
+          if (data.code === "Ok" && route?.geometry?.coordinates?.length) result = {
+            path: route.geometry.coordinates.map((point: number[]) => [Number(point[0]), Number(point[1])]),
+            distanceMeters: Number(route.distance ?? 0),
+            durationMinutes: Math.max(1, Math.round(Number(route.duration ?? 0) / 60)),
+            basis: "OSM_ROAD_NETWORK",
+          };
+        }
+      }
+      if (!result) return secured(Response.json({ error: "사용 가능한 도로 경로가 없습니다." }, { status: 502 }));
       await env.DB.prepare(`INSERT INTO place_search_cache (cache_key,response_json,fetched_at,expires_at) VALUES (?1,?2,?3,?4)
         ON CONFLICT(cache_key) DO UPDATE SET response_json=excluded.response_json,fetched_at=excluded.fetched_at,expires_at=excluded.expires_at`)
         .bind(cacheKey, JSON.stringify(result), now, now + 24 * 60 * 60).run();
