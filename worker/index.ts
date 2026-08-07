@@ -141,7 +141,7 @@ export default {
       const limited = await rateLimitResponse(env.DB, "naver-route:global", 1000, 3600);
       if (limited) return secured(limited);
 
-      const endpoint = new URL("https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving");
+      const endpoint = new URL("https://maps.apigw.ntruss.com/map-direction/v1/driving");
       endpoint.searchParams.set("start", points[0].join(","));
       endpoint.searchParams.set("goal", points.at(-1)!.join(","));
       if (points.length > 2) endpoint.searchParams.set("waypoints", points.slice(1, -1).map((point) => point.join(",")).join("|"));
