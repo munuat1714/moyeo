@@ -25,7 +25,7 @@ export type Stop = {
   description: string
   latitude?: number
   longitude?: number
-  source?: '한국관광공사·부산관광포털' | '네이버 지역검색' | '운영자 검수'
+  source?: string
   verifiedAt?: string
   placeUrl?: string
 }

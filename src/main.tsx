@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign,
-  Bell, Clock3, Coffee, Compass, Copy, ExternalLink, Home, Map, MapPin, MessageCircle, Plus,
+  Bell, BusFront, Clock3, Coffee, Compass, Copy, ExternalLink, Footprints, Home, Map, MapPin, MessageCircle, Plus,
   RotateCcw, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, TrainFront, Trash2,
   Save, Settings, UserRound, UsersRound, Utensils, Vote, WalletCards, WifiOff, X,
 } from 'lucide-react'
@@ -16,6 +16,7 @@ import type { AppState, Course, Preference, Stop } from './types'
 import { deleteSavedTrip, forgetRoom, hasSavedTrip, isNativeApp, notificationsEnabled, recentRooms, rememberRoom, savedTrips, saveTrip, scheduleTripNotifications, setNotificationsEnabled, shareInvite } from './mobile'
 import type { RecentRoom, SavedTrip } from './mobile'
 import { apiUrl } from './runtime'
+import { sourceDisplay, transitLeg, transitLegs } from './route-display'
 import 'pretendard/dist/web/variable/pretendardvariable.css'
 import './styles.css'
 
@@ -1090,7 +1091,9 @@ function Timeline({ stops, onRemove, onMove, onEdit, disabled, renderAfter }: { 
     const after = renderAfter?.(index)
     const dragging = dragSource === index
     const dragOver = dragSource !== null && dragTarget === index && !dragging
-    return <React.Fragment key={`${stop.time}-${stop.title}-${index}`}><div data-stop-index={index} className={`timeline-stop ${dragging ? 'dragging' : ''} ${dragOver ? 'drag-over' : ''}`}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className={`stop-card ${onMove ? 'draggable-stop-card' : ''}`} tabIndex={onMove ? 0 : undefined} aria-roledescription={onMove ? '순서를 바꿀 수 있는 장소 카드' : undefined} onPointerDown={(event) => startDrag(event, index)} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} onKeyDown={(event) => { if (!onMove || disabled || !event.altKey) return; if (event.key === 'ArrowUp' && index > 0) { event.preventDefault(); onMove(index, -1) } if (event.key === 'ArrowDown' && index < stops.length - 1) { event.preventDefault(); onMove(index, 1) } }}><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onMove && <><button type="button" disabled={disabled || index === 0} aria-label={`${stop.title} 위로 이동`} onClick={() => onMove(index, -1)}><ChevronUp size={16} /></button><button type="button" disabled={disabled || index === stops.length - 1} aria-label={`${stop.title} 아래로 이동`} onClick={() => onMove(index, 1)}><ChevronDown size={16} /></button></>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><div className="stop-title-row"><b>{stop.title}</b>{isOfficialModelRestaurant(stop) && <OfficialRestaurantBadge />}</div><p>{stop.description}</p>{onEdit && <button className="replace-place-button" disabled={disabled} onClick={() => onEdit(index)}><MapPin size={13} /> 장소 변경</button>}<div className="stop-footer"><small>{stop.source ?? '운영자 검수'}{stop.verifiedAt ? ` · ${stop.verifiedAt} 기준` : ''}</small></div><PlaceLookup stop={stop} /></div></div>{after && <div className="inline-route-editor">{after}</div>}</React.Fragment>
+    const source = sourceDisplay(stop.source, stop.verifiedAt)
+    const leg = index < stops.length - 1 ? transitLeg(stop, stops[index + 1]) : null
+    return <React.Fragment key={`${stop.time}-${stop.title}-${index}`}><div data-stop-index={index} className={`timeline-stop ${dragging ? 'dragging' : ''} ${dragOver ? 'drag-over' : ''}`}><time>{stop.time}</time><div className="timeline-pin"><i className={stop.shared ? 'shared' : ''}>{iconFor(stop.category)}</i>{index < stops.length - 1 && <span />}</div><div className={`stop-card ${onMove ? 'draggable-stop-card' : ''}`} tabIndex={onMove ? 0 : undefined} aria-roledescription={onMove ? '순서를 바꿀 수 있는 장소 카드' : undefined} onPointerDown={(event) => startDrag(event, index)} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} onKeyDown={(event) => { if (!onMove || disabled || !event.altKey) return; if (event.key === 'ArrowUp' && index > 0) { event.preventDefault(); onMove(index, -1) } if (event.key === 'ArrowDown' && index < stops.length - 1) { event.preventDefault(); onMove(index, 1) } }}><div><small>{stop.category} · {stop.duration}</small><span className="stop-tools">{stop.shared && <em>공통</em>}{onMove && <><button type="button" disabled={disabled || index === 0} aria-label={`${stop.title} 위로 이동`} onClick={() => onMove(index, -1)}><ChevronUp size={16} /></button><button type="button" disabled={disabled || index === stops.length - 1} aria-label={`${stop.title} 아래로 이동`} onClick={() => onMove(index, 1)}><ChevronDown size={16} /></button></>}{onRemove && <button aria-label={`${stop.title} 일정에서 삭제`} onClick={() => onRemove(index)}><Trash2 size={14} /></button>}</span></div><div className="stop-title-row"><b>{stop.title}</b>{isOfficialModelRestaurant(stop) && <OfficialRestaurantBadge />}</div><p>{stop.description}</p>{onEdit && <button className="replace-place-button" disabled={disabled} onClick={() => onEdit(index)}><MapPin size={13} /> 장소 변경</button>}<div className="stop-footer"><small title={source.title}>{source.text}</small></div><PlaceLookup stop={stop} /></div></div>{leg && <TransitLegCard leg={leg} />}{after && <div className="inline-route-editor">{after}</div>}</React.Fragment>
   })}</div>
 }
 
@@ -1121,7 +1124,15 @@ function RouteMap({ stops }: { stops: Stop[] }) {
         const coords = points.map((stop) => new maps.LatLng(stop.latitude, stop.longitude))
         const map = new maps.Map(container.current, { center: coords[0], zoom: 12, zoomControl: true })
         coords.forEach((position: unknown, index: number) => new maps.Marker({ position, map, title: `${index + 1}. ${points[index].title}` }))
-        new maps.Polyline({ map, path: coords, strokeColor: '#1769aa', strokeWeight: 4, strokeOpacity: 0.8 })
+        transitLegs(points).forEach((leg, index) => {
+          if (!leg) return
+          const from = points[index], to = points[index + 1]
+          const bend = new maps.LatLng(
+            (from.latitude! + to.latitude!) / 2 + (to.longitude! - from.longitude!) * 0.06,
+            (from.longitude! + to.longitude!) / 2 - (to.latitude! - from.latitude!) * 0.06,
+          )
+          new maps.Polyline({ map, path: [coords[index], bend, coords[index + 1]], strokeColor: leg.color, strokeWeight: 5, strokeOpacity: 0.86, strokeStyle: leg.mode === '도보' ? 'shortdash' : 'solid' })
+        })
         const bounds = new maps.LatLngBounds(); coords.forEach((coord: unknown) => bounds.extend(coord)); map.fitBounds(bounds, { top: 45, right: 30, bottom: 45, left: 30 })
         setMapReady(true)
       } catch { if (!cancelled) setMapUnavailable(true) }
@@ -1129,7 +1140,13 @@ function RouteMap({ stops }: { stops: Stop[] }) {
     initialize()
     return () => { cancelled = true }
   }, [stops])
-  return <div className="route-map-wrap"><div ref={container} className={`route-map naver-map ${mapReady ? 'ready' : ''}`} />{!mapReady && <div className="route-map route-map-fallback"><div className="map-grid" /><div className="route-path" />{stops.slice(0, 5).map((stop, i) => <div key={stop.title} className={`map-stop stop-${i}`}><i>{i + 1}</i><span>{stop.title}</span></div>)}</div>}{mapUnavailable && <span className="map-fallback-note">네이버 지도 키를 설정하면 실제 지도가 표시됩니다.</span>}</div>
+  const legs = transitLegs(stops).filter((leg) => leg !== null)
+  return <div className="route-map-block"><div className="route-map-wrap"><div ref={container} className={`route-map naver-map ${mapReady ? 'ready' : ''}`} />{!mapReady && <div className="route-map route-map-fallback"><div className="map-grid" /><div className="route-path" />{stops.slice(0, 5).map((stop, i) => <div key={stop.title} className={`map-stop stop-${i}`}><i>{i + 1}</i><span>{stop.title}</span></div>)}</div>}{mapUnavailable && <span className="map-fallback-note">네이버 지도 키를 설정하면 실제 지도가 표시됩니다.</span>}</div>{legs.length > 0 && <div className="map-transit-summary" aria-label="구간별 예상 이동"><span><Footprints size={14} /> 도보</span><span><BusFront size={14} /> 버스</span><span><TrainFront size={14} /> 지하철</span><small>거리와 시간은 예상값</small></div>}</div>
+}
+
+function TransitLegCard({ leg }: { leg: NonNullable<ReturnType<typeof transitLeg>> }) {
+  const Icon = leg.mode === '도보' ? Footprints : leg.mode === '버스·도보' ? BusFront : TrainFront
+  return <div className="transit-leg" aria-label={`${leg.from.title}에서 ${leg.to.title} 이동 안내`}><Icon size={15} /><span><b>{leg.mode}</b><small>약 {leg.distanceKm.toFixed(1)}km · {leg.minutes}분 예상</small></span><em>실시간 교통에 따라 달라져요</em></div>
 }
 
 function PlaceLookup({ stop }: { stop: Stop }) {
