@@ -96,6 +96,31 @@ export default {
       }
     }
 
+    if (url.pathname === "/api/feedback" && request.method === "POST") {
+      const limited = await rateLimitResponse(env.DB, 'feedback:global', 2000, 3600);
+      if (limited) return secured(limited);
+      try {
+        const body = await request.json<{ sentiment?: string; reason?: string; comment?: string; surface?: string; clientKind?: string }>();
+        const sentiments = new Set(['helpful', 'not_helpful']);
+        const reasons = new Set(['taste', 'route', 'places', 'distance', 'wrong_place', 'other', '']);
+        const surfaces = new Set(['service', 'demo']);
+        const clientKinds = new Set(['android_app', 'web_android', 'web_ios', 'web_desktop', 'web']);
+        if (!body.sentiment || !sentiments.has(body.sentiment)) return Response.json({ error: '만족도를 선택해 주세요.' }, { status: 400 });
+        const reason = reasons.has(body.reason ?? '') ? body.reason ?? '' : '';
+        const surface = surfaces.has(body.surface ?? '') ? body.surface! : 'service';
+        const clientKind = clientKinds.has(body.clientKind ?? '') ? body.clientKind! : 'web';
+        const comment = String(body.comment ?? '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+        const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+        await env.DB.prepare(`INSERT INTO anonymous_feedback
+          (feedback_date,sentiment,reason,comment,surface,client_kind,created_at)
+          VALUES (?1,?2,?3,?4,?5,?6,?7)`)
+          .bind(day, body.sentiment, reason, comment, surface, clientKind, Math.floor(Date.now() / 1000)).run();
+        return secured(Response.json({ ok: true }, { status: 201, headers: { 'Cache-Control': 'no-store' } }));
+      } catch {
+        return secured(Response.json({ error: '피드백 내용을 확인해 주세요.' }, { status: 400 }));
+      }
+    }
+
     if (url.pathname.startsWith('/api/rooms')) {
       if (url.pathname === '/api/rooms' && request.method === 'POST') {
         const limited = await rateLimitResponse(env.DB, 'rooms:create:global', 1000, 3600);

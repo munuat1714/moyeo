@@ -977,6 +977,9 @@ function FinalTrip({ courses, state, setState, tab, setTab }: { courses: Course[
   const [schedule, setSchedule] = useState<Stop[][]>(() => course.days.map((items) => [...items]))
   const [copied, setCopied] = useState(false)
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null)
+  const [feedbackReason, setFeedbackReason] = useState('')
+  const [feedbackComment, setFeedbackComment] = useState('')
+  const [feedbackStatus, setFeedbackStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [interest, setInterest] = useState<'beta' | 'interview' | null>(null)
   const reservable = course.days.flat().filter((stop) => stop.reservable)
   const book = (title: string) => setState((s) => ({ ...s, booked: s.booked.includes(title) ? s.booked : [...s.booked, title] }))
@@ -1000,8 +1003,27 @@ function FinalTrip({ courses, state, setState, tab, setTab }: { courses: Course[
   }
   const answerFeedback = (value: 'up' | 'down') => {
     setFeedback(value)
-    localStorage.setItem('modu-trip-feedback-v1', value)
-    track(value === 'up' ? 'feedback_helpful' : 'feedback_not_helpful')
+    setFeedbackReason('')
+    setFeedbackStatus('idle')
+  }
+  const submitFeedback = async () => {
+    if (!feedback || feedbackStatus === 'sending') return
+    setFeedbackStatus('sending')
+    const userAgent = navigator.userAgent
+    const clientKind = isNativeApp() ? 'android_app' : /Android/i.test(userAgent) ? 'web_android' : /iPhone|iPad|iPod/i.test(userAgent) ? 'web_ios' : 'web_desktop'
+    try {
+      const response = await fetch(apiUrl('/api/feedback'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sentiment: feedback === 'up' ? 'helpful' : 'not_helpful', reason: feedbackReason,
+          comment: feedbackComment, surface: window.location.pathname.startsWith('/demo') ? 'demo' : 'service', clientKind,
+        }),
+      })
+      if (!response.ok) throw new Error('feedback-failed')
+      localStorage.setItem('modu-trip-feedback-v2', JSON.stringify({ value: feedback, at: new Date().toISOString() }))
+      track(feedback === 'up' ? 'feedback_helpful' : 'feedback_not_helpful')
+      setFeedbackStatus('sent')
+    } catch { setFeedbackStatus('error') }
   }
   const chooseInterest = (value: 'beta' | 'interview') => {
     setInterest(value)
@@ -1028,7 +1050,17 @@ function FinalTrip({ courses, state, setState, tab, setTab }: { courses: Course[
         <section className="feedback-card">
           <span>30초만 도와주세요</span><h3>이 일정이 실제 여행 계획에 도움이 됐나요?</h3>
           <div><button className={feedback === 'up' ? 'selected' : ''} onClick={() => answerFeedback('up')}><ThumbsUp size={18} /> 도움 됐어요</button><button className={feedback === 'down' ? 'selected' : ''} onClick={() => answerFeedback('down')}><ThumbsDown size={18} /> 아쉬워요</button></div>
-          {feedback && <p><Check size={14} /> 답변이 이 기기에 익명으로 저장됐어요.</p>}
+          {feedback && feedbackStatus !== 'sent' && <div className="feedback-details">
+            <b>{feedback === 'up' ? '어떤 점이 좋았나요?' : '어떤 점이 아쉬웠나요?'}</b>
+            <div className="feedback-reasons">{(feedback === 'up'
+              ? [['taste', '취향에 맞아요'], ['route', '동선이 좋아요'], ['places', '장소가 좋아요']]
+              : [['distance', '거리가 멀어요'], ['taste', '취향과 달라요'], ['wrong_place', '장소 정보가 틀려요'], ['route', '이동이 불편해요'], ['other', '기타']]
+            ).map(([value, label]) => <button type="button" key={value} className={feedbackReason === value ? 'selected' : ''} onClick={() => setFeedbackReason(value)}>{label}</button>)}</div>
+            <label><span>더 알려주실 내용이 있나요? <small>선택</small></span><textarea maxLength={300} value={feedbackComment} onChange={(event) => setFeedbackComment(event.target.value)} placeholder="개인정보는 적지 말아 주세요." /></label>
+            <button type="button" className="feedback-submit" onClick={submitFeedback} disabled={feedbackStatus === 'sending'}>{feedbackStatus === 'sending' ? '보내는 중…' : '익명으로 의견 보내기'}</button>
+            {feedbackStatus === 'error' && <p className="feedback-error">전송하지 못했어요. 잠시 후 다시 시도해 주세요.</p>}
+          </div>}
+          {feedbackStatus === 'sent' && <p><Check size={14} /> 의견을 익명으로 전달했어요. 고맙습니다.</p>}
         </section>
         <section className="interest-card">
           <span className="eyebrow dark"><Sparkles size={14} /> 다음 단계에 함께해요</span>
