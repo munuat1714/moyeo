@@ -1153,7 +1153,7 @@ function TransitLegCard({ leg }: { leg: NonNullable<ReturnType<typeof transitLeg
 }
 
 type RoadRoute = { path: number[][]; distanceMeters: number; durationMinutes: number }
-const roadRouteRequests = new Map<string, Promise<RoadRoute | null>>()
+const roadRouteRequests = new globalThis.Map<string, Promise<RoadRoute | null>>()
 
 function fetchRoadRoute(points: string): Promise<RoadRoute | null> {
   const existing = roadRouteRequests.get(points)
