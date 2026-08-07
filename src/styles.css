@@ -339,7 +339,7 @@ body { background: #fff; }.app-shell { box-shadow: none; border-left: 1px solid 
   border-radius: 12px; color: #fff; background: var(--green); font-size: 14px; font-weight: 800; text-decoration: none;
 }
 .landing-entry-actions { width: min(100%, 390px); margin: 22px auto 0; display: grid; gap: 8px; }
-.landing-demo-secondary { min-height: 44px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); background: white; font-size: 12px; font-weight: 800; text-decoration: none; }
+.web-launch-note { margin: 2px 8px 0; color: var(--muted); font-size: 11px; line-height: 1.55; text-align: center; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid #8ebfff; outline-offset: 3px;
 }

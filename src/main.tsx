@@ -589,8 +589,8 @@ function HomeScreen() {
           <article><span><Vote size={20} /></span><div><b>함께 결정</b><small>투표로 최종 경로를 정해요</small></div></article>
         </div>
         <div className="landing-entry-actions">
-          <a className="hero-demo-link" href="/app" onClick={() => track('landing_app_click')}>모행 시작하기 <ArrowRight size={18} /></a>
-          <a className="landing-demo-secondary" href="/demo" onClick={() => track('landing_demo_click')}>개인정보 없이 데모 체험하기</a>
+          <a className="hero-demo-link" href="/app" onClick={() => track('landing_app_click')}>웹에서 모행 써보기 <ArrowRight size={18} /></a>
+          <p className="web-launch-note">Play Store 심사 중 · Android와 iPhone에서 설치 없이 이용할 수 있어요</p>
         </div>
       </section>
 
