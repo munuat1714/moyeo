@@ -58,3 +58,13 @@ export function sourceDisplay(source?: string, verifiedAt?: string) {
     title: date ? `원본 데이터 ${date.detail}` : undefined,
   }
 }
+
+export function naverRouteUrl(leg: TransitLeg) {
+  const action = leg.mode === '도보' ? 'walk' : 'public'
+  const params = new URLSearchParams({
+    slat: String(leg.from.latitude), slng: String(leg.from.longitude), sname: leg.from.title,
+    dlat: String(leg.to.latitude), dlng: String(leg.to.longitude), dname: leg.to.title,
+    appname: 'com.moyeotrip.app',
+  })
+  return `nmap://route/${action}?${params}`
+}

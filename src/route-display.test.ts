@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatSourceDate, sourceDisplay, transitLeg } from './route-display'
+import { formatSourceDate, naverRouteUrl, sourceDisplay, transitLeg } from './route-display'
 import type { Stop } from './types'
 
 const stop = (title: string, latitude: number, longitude: number): Stop => ({
@@ -17,6 +17,8 @@ describe('route display', () => {
   })
 
   it('먼 구간은 대중교통으로 안내한다', () => {
-    expect(transitLeg(stop('A', 35.1151, 129.0414), stop('B', 35.1532, 129.1187))?.mode).toBe('지하철·버스')
+    const leg = transitLeg(stop('A', 35.1151, 129.0414), stop('B', 35.1532, 129.1187))!
+    expect(leg.mode).toBe('지하철·버스')
+    expect(naverRouteUrl(leg)).toContain('nmap://route/public?')
   })
 })

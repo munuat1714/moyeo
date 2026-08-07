@@ -16,7 +16,7 @@ import type { AppState, Course, Preference, Stop } from './types'
 import { deleteSavedTrip, forgetRoom, hasSavedTrip, isNativeApp, notificationsEnabled, recentRooms, rememberRoom, savedTrips, saveTrip, scheduleTripNotifications, setNotificationsEnabled, shareInvite } from './mobile'
 import type { RecentRoom, SavedTrip } from './mobile'
 import { apiUrl } from './runtime'
-import { sourceDisplay, transitLeg, transitLegs } from './route-display'
+import { naverRouteUrl, sourceDisplay, transitLeg, transitLegs } from './route-display'
 import 'pretendard/dist/web/variable/pretendardvariable.css'
 import './styles.css'
 
@@ -1101,14 +1101,25 @@ function RouteMap({ stops }: { stops: Stop[] }) {
   const container = useRef<HTMLDivElement>(null)
   const [mapReady, setMapReady] = useState(false)
   const [mapUnavailable, setMapUnavailable] = useState(false)
+  const [roadRoute, setRoadRoute] = useState<{ path: number[][]; distanceMeters: number; durationMinutes: number } | null>(null)
+  const [routeUnavailable, setRouteUnavailable] = useState(false)
   useEffect(() => {
     let cancelled = false
     const points = stops.filter((stop) => stop.latitude && stop.longitude)
     if (!container.current || points.length === 0) return
     const initialize = async () => {
       try {
-        const config = await fetch(apiUrl('/api/naver/config')).then((response) => response.json()) as { enabled: boolean; clientId?: string }
+        const pointParam = points.map((point) => `${point.longitude},${point.latitude}`).join('|')
+        const [config, routeResponse] = await Promise.all([
+          fetch(apiUrl('/api/naver/config')).then((response) => response.json()) as Promise<{ enabled: boolean; clientId?: string }>,
+          fetch(apiUrl(`/api/naver/route?points=${encodeURIComponent(pointParam)}`)),
+        ])
         if (!config.enabled || !config.clientId) throw new Error('not-configured')
+        const routeData = routeResponse.ok
+          ? await routeResponse.json() as { path: number[][]; distanceMeters: number; durationMinutes: number }
+          : null
+        if (routeData) setRoadRoute(routeData)
+        else setRouteUnavailable(true)
         const load = () => new Promise<void>((resolve, reject) => {
           if ((window as any).naver?.maps) return resolve()
           const existing = document.getElementById('naver-map-sdk') as HTMLScriptElement | null
@@ -1124,15 +1135,9 @@ function RouteMap({ stops }: { stops: Stop[] }) {
         const coords = points.map((stop) => new maps.LatLng(stop.latitude, stop.longitude))
         const map = new maps.Map(container.current, { center: coords[0], zoom: 12, zoomControl: true })
         coords.forEach((position: unknown, index: number) => new maps.Marker({ position, map, title: `${index + 1}. ${points[index].title}` }))
-        transitLegs(points).forEach((leg, index) => {
-          if (!leg) return
-          const from = points[index], to = points[index + 1]
-          const bend = new maps.LatLng(
-            (from.latitude! + to.latitude!) / 2 + (to.longitude! - from.longitude!) * 0.06,
-            (from.longitude! + to.longitude!) / 2 - (to.latitude! - from.latitude!) * 0.06,
-          )
-          new maps.Polyline({ map, path: [coords[index], bend, coords[index + 1]], strokeColor: leg.color, strokeWeight: 5, strokeOpacity: 0.86, strokeStyle: leg.mode === '도보' ? 'shortdash' : 'solid' })
-        })
+        if (routeData) {
+          new maps.Polyline({ map, path: routeData.path.map(([lng, lat]) => new maps.LatLng(lat, lng)), strokeColor: '#1769aa', strokeWeight: 5, strokeOpacity: 0.86 })
+        }
         const bounds = new maps.LatLngBounds(); coords.forEach((coord: unknown) => bounds.extend(coord)); map.fitBounds(bounds, { top: 45, right: 30, bottom: 45, left: 30 })
         setMapReady(true)
       } catch { if (!cancelled) setMapUnavailable(true) }
@@ -1141,12 +1146,12 @@ function RouteMap({ stops }: { stops: Stop[] }) {
     return () => { cancelled = true }
   }, [stops])
   const legs = transitLegs(stops).filter((leg) => leg !== null)
-  return <div className="route-map-block"><div className="route-map-wrap"><div ref={container} className={`route-map naver-map ${mapReady ? 'ready' : ''}`} />{!mapReady && <div className="route-map route-map-fallback"><div className="map-grid" /><div className="route-path" />{stops.slice(0, 5).map((stop, i) => <div key={stop.title} className={`map-stop stop-${i}`}><i>{i + 1}</i><span>{stop.title}</span></div>)}</div>}{mapUnavailable && <span className="map-fallback-note">네이버 지도 키를 설정하면 실제 지도가 표시됩니다.</span>}</div>{legs.length > 0 && <div className="map-transit-summary" aria-label="구간별 예상 이동"><span><Footprints size={14} /> 도보</span><span><BusFront size={14} /> 버스</span><span><TrainFront size={14} /> 지하철</span><small>거리와 시간은 예상값</small></div>}</div>
+  return <div className="route-map-block"><div className="route-map-wrap"><div ref={container} className={`route-map naver-map ${mapReady ? 'ready' : ''}`} />{!mapReady && <div className="route-map route-map-fallback"><div className="map-grid" />{stops.slice(0, 5).map((stop, i) => <div key={stop.title} className={`map-stop stop-${i}`}><i>{i + 1}</i><span>{stop.title}</span></div>)}</div>}{mapUnavailable && <span className="map-fallback-note">네이버 지도 키를 설정하면 실제 지도가 표시됩니다.</span>}</div>{roadRoute && <div className="road-route-summary"><Map size={14} /><span>도로를 따라 약 {(roadRoute.distanceMeters / 1000).toFixed(1)}km</span><small>대중교통 탑승 경로는 구간별 길찾기에서 확인</small></div>}{routeUnavailable && <div className="route-unavailable-note">도로 경로를 확인할 수 없어 잘못된 연결선은 표시하지 않았어요.</div>}{legs.length > 0 && <div className="map-transit-summary" aria-label="구간별 예상 이동"><span><Footprints size={14} /> 도보</span><span><BusFront size={14} /> 버스</span><span><TrainFront size={14} /> 지하철</span><small>구간별 실제 길찾기 제공</small></div>}</div>
 }
 
 function TransitLegCard({ leg }: { leg: NonNullable<ReturnType<typeof transitLeg>> }) {
   const Icon = leg.mode === '도보' ? Footprints : leg.mode === '버스·도보' ? BusFront : TrainFront
-  return <div className="transit-leg" aria-label={`${leg.from.title}에서 ${leg.to.title} 이동 안내`}><Icon size={15} /><span><b>{leg.mode}</b><small>약 {leg.distanceKm.toFixed(1)}km · {leg.minutes}분 예상</small></span><em>실시간 교통에 따라 달라져요</em></div>
+  return <div className="transit-leg" aria-label={`${leg.from.title}에서 ${leg.to.title} 이동 안내`}><Icon size={15} /><span><b>{leg.mode}</b><small>약 {leg.distanceKm.toFixed(1)}km · {leg.minutes}분 예상</small></span><a href={naverRouteUrl(leg)}><ExternalLink size={12} /> 실제 길찾기</a></div>
 }
 
 function PlaceLookup({ stop }: { stop: Stop }) {
