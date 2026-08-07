@@ -1112,12 +1112,10 @@ function RouteMap({ stops }: { stops: Stop[] }) {
         const pointParam = points.map((point) => `${point.longitude},${point.latitude}`).join('|')
         const [config, routeResponse] = await Promise.all([
           fetch(apiUrl('/api/naver/config')).then((response) => response.json()) as Promise<{ enabled: boolean; clientId?: string }>,
-          fetch(apiUrl(`/api/naver/route?points=${encodeURIComponent(pointParam)}`)),
+          fetchRoadRoute(pointParam),
         ])
         if (!config.enabled || !config.clientId) throw new Error('not-configured')
-        const routeData = routeResponse.ok
-          ? await routeResponse.json() as { path: number[][]; distanceMeters: number; durationMinutes: number }
-          : null
+        const routeData = routeResponse
         if (routeData) setRoadRoute(routeData)
         else setRouteUnavailable(true)
         const load = () => new Promise<void>((resolve, reject) => {
@@ -1151,7 +1149,32 @@ function RouteMap({ stops }: { stops: Stop[] }) {
 
 function TransitLegCard({ leg }: { leg: NonNullable<ReturnType<typeof transitLeg>> }) {
   const Icon = leg.mode === '도보' ? Footprints : leg.mode === '버스·도보' ? BusFront : TrainFront
-  return <div className="transit-leg" aria-label={`${leg.from.title}에서 ${leg.to.title} 이동 안내`}><Icon size={15} /><span><b>{leg.mode}</b><small>약 {leg.distanceKm.toFixed(1)}km · {leg.minutes}분 예상</small></span><a href={naverRouteUrl(leg)}><ExternalLink size={12} /> 실제 길찾기</a></div>
+  return <div className="transit-leg" aria-label={`${leg.from.title}에서 ${leg.to.title} 이동 안내`}><Icon size={15} /><span><b>{leg.mode}</b><small>약 {leg.distanceKm.toFixed(1)}km · {leg.minutes}분 예상</small></span><a href={naverRouteUrl(leg)} target="_blank" rel="noreferrer"><ExternalLink size={12} /> 실제 길찾기</a></div>
+}
+
+type RoadRoute = { path: number[][]; distanceMeters: number; durationMinutes: number }
+const roadRouteRequests = new Map<string, Promise<RoadRoute | null>>()
+
+function fetchRoadRoute(points: string): Promise<RoadRoute | null> {
+  const existing = roadRouteRequests.get(points)
+  if (existing) return existing
+  const request = (async () => {
+    const storageKey = `mohang-road-route:${points}`
+    try {
+      const cached = JSON.parse(localStorage.getItem(storageKey) ?? 'null') as { savedAt: number; route: RoadRoute } | null
+      if (cached?.route?.path?.length && Date.now() - cached.savedAt < 7 * 24 * 60 * 60 * 1000) return cached.route
+    } catch { /* refresh invalid cache */ }
+    try {
+      const response = await fetch(apiUrl(`/api/naver/route?points=${encodeURIComponent(points)}`))
+      if (!response.ok) return null
+      const route = await response.json() as RoadRoute
+      if (!route.path?.length) return null
+      try { localStorage.setItem(storageKey, JSON.stringify({ savedAt: Date.now(), route })) } catch { /* storage is optional */ }
+      return route
+    } catch { return null }
+  })()
+  roadRouteRequests.set(points, request)
+  return request
 }
 
 function PlaceLookup({ stop }: { stop: Stop }) {

@@ -121,9 +121,6 @@ export default {
     }
 
     if (url.pathname === "/api/naver/route" && request.method === "GET") {
-      if (!env.NAVER_MAPS_CLIENT_ID || !env.NAVER_MAPS_CLIENT_SECRET) {
-        return secured(Response.json({ error: "네이버 경로 API가 설정되지 않았습니다." }, { status: 503 }));
-      }
       const rawPoints = url.searchParams.get("points") ?? "";
       const points = rawPoints.split("|").map((value) => value.split(",").map(Number));
       const valid = points.length >= 2 && points.length <= 6 && points.every(([lng, lat]) =>
@@ -136,54 +133,40 @@ export default {
       const cached = await env.DB.prepare("SELECT response_json FROM place_search_cache WHERE cache_key=?1 AND expires_at>=?2")
         .bind(cacheKey, now).first<{ response_json: string }>();
       if (cached?.response_json) {
-        try { return secured(Response.json(JSON.parse(cached.response_json), { headers: { "Cache-Control": "public, max-age=3600" } })); } catch { /* refresh */ }
+        try {
+          const value = JSON.parse(cached.response_json);
+          if (value?.unavailable) return secured(Response.json({ error: "사용 가능한 도로 경로가 없습니다." }, { status: 503, headers: { "Cache-Control": "public, max-age=600" } }));
+          return secured(Response.json(value, { headers: { "Cache-Control": "public, max-age=86400" } }));
+        } catch { /* refresh */ }
       }
       const limited = await rateLimitResponse(env.DB, "naver-route:global", 1000, 3600);
       if (limited) return secured(limited);
 
-      const endpoint = new URL("https://maps.apigw.ntruss.com/map-direction/v1/driving");
-      endpoint.searchParams.set("start", points[0].join(","));
-      endpoint.searchParams.set("goal", points.at(-1)!.join(","));
-      if (points.length > 2) endpoint.searchParams.set("waypoints", points.slice(1, -1).map((point) => point.join(",")).join("|"));
-      endpoint.searchParams.set("option", "traavoidcaronly");
-      const response = await fetch(endpoint, { headers: {
-        "x-ncp-apigw-api-key-id": env.NAVER_MAPS_CLIENT_ID,
-        "x-ncp-apigw-api-key": env.NAVER_MAPS_CLIENT_SECRET,
-      } });
       let result: { path: number[][]; distanceMeters: number; durationMinutes: number; basis: string } | null = null;
-      if (response.ok) {
-        const data = await response.json<any>();
-        const route = data.route?.traavoidcaronly?.[0] ?? data.route?.traoptimal?.[0];
-        if (route?.path?.length) result = {
-          path: route.path.map((point: number[]) => [Number(point[0]), Number(point[1])]),
-          distanceMeters: Number(route.summary?.distance ?? 0),
-          durationMinutes: Math.max(1, Math.round(Number(route.summary?.duration ?? 0) / 60000)),
-          basis: "NAVER_DIRECTIONS_ROAD",
+      const osrmCoordinates = points.map((point) => point.join(",")).join(";");
+      const osrm = await fetch(`https://router.project-osrm.org/route/v1/driving/${osrmCoordinates}?overview=full&geometries=geojson&steps=false`, {
+        headers: { "User-Agent": "Mohang/1.0 (https://mohang.moyo-ra.workers.dev)" },
+      });
+      if (osrm.ok) {
+        const data = await osrm.json<any>();
+        const route = data.routes?.[0];
+        if (data.code === "Ok" && route?.geometry?.coordinates?.length) result = {
+          path: route.geometry.coordinates.map((point: number[]) => [Number(point[0]), Number(point[1])]),
+          distanceMeters: Number(route.distance ?? 0),
+          durationMinutes: Math.max(1, Math.round(Number(route.duration ?? 0) / 60)),
+          basis: "OSM_ROAD_NETWORK",
         };
-      } else {
-        console.error("naver-directions-error", { status: response.status, detail: (await response.text()).slice(0, 300) });
       }
       if (!result) {
-        const osrmCoordinates = points.map((point) => point.join(",")).join(";");
-        const osrm = await fetch(`https://router.project-osrm.org/route/v1/driving/${osrmCoordinates}?overview=full&geometries=geojson&steps=false`, {
-          headers: { "User-Agent": "Mohang/1.0 (https://mohang.moyo-ra.workers.dev)" },
-        });
-        if (osrm.ok) {
-          const data = await osrm.json<any>();
-          const route = data.routes?.[0];
-          if (data.code === "Ok" && route?.geometry?.coordinates?.length) result = {
-            path: route.geometry.coordinates.map((point: number[]) => [Number(point[0]), Number(point[1])]),
-            distanceMeters: Number(route.distance ?? 0),
-            durationMinutes: Math.max(1, Math.round(Number(route.duration ?? 0) / 60)),
-            basis: "OSM_ROAD_NETWORK",
-          };
-        }
+        await env.DB.prepare(`INSERT INTO place_search_cache (cache_key,response_json,fetched_at,expires_at) VALUES (?1,?2,?3,?4)
+          ON CONFLICT(cache_key) DO UPDATE SET response_json=excluded.response_json,fetched_at=excluded.fetched_at,expires_at=excluded.expires_at`)
+          .bind(cacheKey, JSON.stringify({ unavailable: true }), now, now + 60 * 60).run();
+        return secured(Response.json({ error: "사용 가능한 도로 경로가 없습니다." }, { status: 502 }));
       }
-      if (!result) return secured(Response.json({ error: "사용 가능한 도로 경로가 없습니다." }, { status: 502 }));
       await env.DB.prepare(`INSERT INTO place_search_cache (cache_key,response_json,fetched_at,expires_at) VALUES (?1,?2,?3,?4)
         ON CONFLICT(cache_key) DO UPDATE SET response_json=excluded.response_json,fetched_at=excluded.fetched_at,expires_at=excluded.expires_at`)
-        .bind(cacheKey, JSON.stringify(result), now, now + 24 * 60 * 60).run();
-      return secured(Response.json(result, { headers: { "Cache-Control": "public, max-age=3600" } }));
+        .bind(cacheKey, JSON.stringify(result), now, now + 30 * 24 * 60 * 60).run();
+      return secured(Response.json(result, { headers: { "Cache-Control": "public, max-age=86400" } }));
     }
 
     if (url.pathname === "/api/public-data/status" && request.method === "GET") {

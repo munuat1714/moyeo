@@ -61,10 +61,7 @@ export function sourceDisplay(source?: string, verifiedAt?: string) {
 
 export function naverRouteUrl(leg: TransitLeg) {
   const action = leg.mode === '도보' ? 'walk' : 'public'
-  const params = new URLSearchParams({
-    slat: String(leg.from.latitude), slng: String(leg.from.longitude), sname: leg.from.title,
-    dlat: String(leg.to.latitude), dlng: String(leg.to.longitude), dname: leg.to.title,
-    appname: 'com.moyeotrip.app',
-  })
-  return `nmap://route/${action}?${params}`
+  const start = `${leg.from.longitude},${leg.from.latitude},${encodeURIComponent(leg.from.title)},-`
+  const destination = `${leg.to.longitude},${leg.to.latitude},${encodeURIComponent(leg.to.title)},-`
+  return `https://map.naver.com/p/directions/${start}/${destination}/-/${action}`
 }

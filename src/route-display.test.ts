@@ -19,6 +19,7 @@ describe('route display', () => {
   it('먼 구간은 대중교통으로 안내한다', () => {
     const leg = transitLeg(stop('A', 35.1151, 129.0414), stop('B', 35.1532, 129.1187))!
     expect(leg.mode).toBe('지하철·버스')
-    expect(naverRouteUrl(leg)).toContain('nmap://route/public?')
+    expect(naverRouteUrl(leg)).toContain('https://map.naver.com/p/directions/')
+    expect(naverRouteUrl(leg)).toContain('/public')
   })
 })
