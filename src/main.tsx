@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
-  ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign,
+  ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, ChevronRight, ChevronUp,
   Bell, BusFront, Clock3, Coffee, Compass, Copy, ExternalLink, Footprints, Home, Map, MapPin, MessageCircle, Plus,
   RotateCcw, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, TrainFront, Trash2,
   Save, Settings, UserRound, UsersRound, Utensils, Vote, WalletCards, WifiOff, X,
@@ -571,16 +571,6 @@ function RecentRoomList({ rooms, loading, onOpen, compact = false }: { rooms: Re
 }
 
 function HomeScreen() {
-  const [interest, setInterest] = useState<'yes' | 'not-yet' | null>(() => {
-    if (typeof localStorage === 'undefined') return null
-    const saved = localStorage.getItem('modu-trip-landing-interest-v1')
-    return saved === 'yes' || saved === 'not-yet' ? saved : null
-  })
-  const answer = (value: 'yes' | 'not-yet') => {
-    setInterest(value)
-    localStorage.setItem('modu-trip-landing-interest-v1', value)
-    track(value === 'yes' ? 'landing_interest_yes' : 'landing_interest_not_yet')
-  }
   return (
     <div className="simple-landing">
       <section className="simple-hero">
@@ -590,27 +580,18 @@ function HomeScreen() {
         </div>
         <span className="eyebrow"><Sparkles size={14} /> 친구 취향으로 완성하는 여행</span>
         <h1>여행 계획,<br /><em>모두의 취향</em>에서 시작해요.</h1>
-        <p>각자 가고 싶은 곳과 여행 스타일을 고르면, 친구 모두가 만족할 코스를 정리하고 투표로 결정하는 여행 계획 서비스입니다.</p>
+        <p>친구들의 취향을 모아 가까운 부산 코스를 추천하고, 투표로 함께 결정하는 당일치기 여행 서비스예요.</p>
+        <div className="concept-flow" aria-label="모행 이용 개요">
+          <article><span><UsersRound size={20} /></span><div><b>취향 선택</b><small>각자 원하는 여행을 골라요</small></div></article>
+          <i><ArrowRight size={17} /></i>
+          <article><span><Sparkles size={20} /></span><div><b>코스 추천</b><small>가까운 실제 장소를 모아요</small></div></article>
+          <i><ArrowRight size={17} /></i>
+          <article><span><Vote size={20} /></span><div><b>함께 결정</b><small>투표로 최종 경로를 정해요</small></div></article>
+        </div>
         <div className="landing-entry-actions">
           <a className="hero-demo-link" href="/app" onClick={() => track('landing_app_click')}>모행 시작하기 <ArrowRight size={18} /></a>
           <a className="landing-demo-secondary" href="/demo" onClick={() => track('landing_demo_click')}>개인정보 없이 데모 체험하기</a>
         </div>
-        <div className="concept-flow" aria-label="모행 이용 개요">
-          <article><span><UsersRound size={20} /></span><div><b>취향을 모으고</b><small>맛집·카페·사진·문화 등 각자의 선택</small></div></article>
-          <i><ArrowRight size={17} /></i>
-          <article><span><Sparkles size={20} /></span><div><b>코스를 만들고</b><small>공통점과 차이를 반영한 여행 일정</small></div></article>
-          <i><ArrowRight size={17} /></i>
-          <article><span><Vote size={20} /></span><div><b>함께 결정해요</b><small>눈치 보지 않는 투표로 최종 선택</small></div></article>
-        </div>
-      </section>
-
-      <section className="interest-survey" aria-labelledby="interest-title">
-        <div><span>한 가지만 알려주세요</span><h2 id="interest-title">이런 서비스가 있다면 사용해보고 싶나요?</h2><p>이름이나 연락처는 수집하지 않으며, 선택 결과는 익명 통계로만 집계됩니다.</p></div>
-        <div className="survey-actions">
-          <button aria-pressed={interest === 'yes'} className={interest === 'yes' ? 'selected' : ''} onClick={() => answer('yes')}><Check size={18} /> 네, 사용해보고 싶어요</button>
-          <button aria-pressed={interest === 'not-yet'} className={interest === 'not-yet' ? 'selected' : ''} onClick={() => answer('not-yet')}><CircleDollarSign size={18} /> 아직은 잘 모르겠어요</button>
-        </div>
-        {interest && <div className="survey-thanks" role="status"><Check size={16} /><span>답변해주셔서 고마워요. 개인을 식별하지 않는 합계로만 반영됩니다.</span></div>}
       </section>
 
       <footer className="simple-footer"><div><img className="footer-brand-logo" src="/social/moyeo-profile.png" alt="" /><b>모행</b></div><p>친구들의 취향을 모아 완성하는 여행 계획 서비스</p><small>© 2026 모행 팀</small></footer>

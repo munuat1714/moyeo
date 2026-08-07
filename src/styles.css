@@ -197,20 +197,20 @@ input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,79,.
 .interest-card > small { display: flex; align-items: center; gap: 5px; margin-top: 15px; color: #92a0b1; font-size: 9px; }
 
 .simple-landing { min-height: calc(100vh - 64px); background: #fff; }
-.simple-hero { max-width: 980px; margin: 0 auto; padding: 96px 40px 70px; text-align: center; }
-.landing-brand { width: max-content; margin: 0 auto 28px; display: flex; align-items: center; gap: 12px; text-align: left; }
-.landing-brand img { width: 54px; height: 54px; display: block; border-radius: 16px; object-fit: cover; }
+.simple-hero { max-width: 980px; min-height: min(760px, calc(100svh - 64px)); margin: 0 auto; padding: 42px 40px 36px; display: flex; flex-direction: column; justify-content: center; text-align: center; }
+.landing-brand { width: max-content; margin: 0 auto 16px; display: flex; align-items: center; gap: 10px; text-align: left; }
+.landing-brand img { width: 46px; height: 46px; display: block; border-radius: 14px; object-fit: cover; }
 .landing-brand span { display: grid; gap: 1px; }
-.landing-brand b { color: var(--ink); font-size: 23px; line-height: 1.1; letter-spacing: -.8px; }
+.landing-brand b { color: var(--ink); font-size: 21px; line-height: 1.1; letter-spacing: -.8px; }
 .landing-brand small { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: 2px; }
 .simple-hero .eyebrow { justify-content: center; }
-.simple-hero h1 { margin: 22px 0 20px; color: var(--ink); font-size: clamp(46px, 6vw, 72px); line-height: 1.08; letter-spacing: -4px; }
+.simple-hero h1 { margin: 14px 0 14px; color: var(--ink); font-size: clamp(42px, 5.2vw, 64px); line-height: 1.08; letter-spacing: -3.5px; }
 .simple-hero h1 em { color: var(--green); font-style: normal; }
-.simple-hero > p { max-width: 650px; margin: 0 auto; color: var(--muted); font-size: 18px; line-height: 1.8; word-break: keep-all; }
-.concept-flow { margin: 54px auto 0; display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 16px; }
-.concept-flow article { min-height: 150px; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; border: 1px solid var(--line); border-radius: 22px; background: #f8fafc; }
-.concept-flow article > span { width: 48px; height: 48px; display: grid; place-items: center; color: var(--green); border-radius: 15px; background: var(--green-soft); }
-.concept-flow article > div { display: grid; gap: 7px; }.concept-flow b { font-size: 17px; }.concept-flow small { color: var(--muted); font-size: 11px; line-height: 1.45; }.concept-flow > i { color: #a6b0bd; }
+.simple-hero > p { max-width: 610px; margin: 0 auto; color: var(--muted); font-size: 16px; line-height: 1.65; word-break: keep-all; }
+.concept-flow { width: min(100%, 720px); margin: 26px auto 0; display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 10px; }
+.concept-flow article { min-height: 84px; padding: 14px; display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid var(--line); border-radius: 16px; background: #fff; text-align: left; }
+.concept-flow article > span { width: 38px; height: 38px; flex: none; display: grid; place-items: center; color: var(--green); border-radius: 12px; background: var(--green-soft); }
+.concept-flow article > div { display: grid; gap: 3px; }.concept-flow b { font-size: 14px; }.concept-flow small { color: var(--muted); font-size: 10px; line-height: 1.4; }.concept-flow > i { color: #a6b0bd; }
 .interest-survey { max-width: 900px; margin: 0 auto 80px; padding: 52px; color: white; border-radius: 32px; background: var(--ink); text-align: center; }
 .interest-survey > div:first-child > span { color: #7bb5ff; font-size: 11px; font-weight: 900; letter-spacing: .8px; }.interest-survey h2 { margin: 12px 0 9px; font-size: 31px; letter-spacing: -1.4px; }.interest-survey p { margin: 0; color: #aab5c3; font-size: 12px; }
 .survey-actions { max-width: 610px; margin: 28px auto 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.survey-actions button { min-height: 54px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #ffffff2e; border-radius: 14px; color: #e8edf4; background: #ffffff0d; font-size: 13px; font-weight: 800; }.survey-actions button:first-child { color: var(--ink); background: white; }.survey-actions button.selected { color: white; border-color: #62a5ff; background: var(--green); box-shadow: 0 0 0 3px #3182f633; }
@@ -285,6 +285,17 @@ input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,79,.
   .drag-move-guide { margin-left: 0; }
 }
 
+@media (min-width: 431px) and (max-width: 800px) {
+  .simple-hero { min-height: calc(100svh - 64px); padding: 32px 28px; }
+  .landing-brand { margin-bottom: 14px; }
+  .simple-hero h1 { margin: 13px 0; font-size: 41px; }
+  .concept-flow { margin-top: 22px; gap: 7px; }
+  .concept-flow > i { display: none; }
+  .concept-flow article { min-height: 58px; padding: 10px 13px; }
+  .concept-flow article > span { width: 35px; height: 35px; }
+  .landing-entry-actions { margin-top: 19px; }
+}
+
 @media (min-width: 700px) {
   body { padding: 24px 0; }
   .app-shell { min-height: calc(100vh - 48px); border-radius: 28px; overflow: hidden; }
@@ -323,12 +334,12 @@ body { background: #fff; }.app-shell { box-shadow: none; border-left: 1px solid 
 
 /* Usability pass: readable mobile type, clear selection, and keyboard focus. */
 .hero-demo-link {
-  width: min(100%, 390px); min-height: 54px; margin: 36px auto 0; padding: 0 18px;
+  width: min(100%, 390px); min-height: 52px; margin: 0 auto; padding: 0 18px;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   border-radius: 12px; color: #fff; background: var(--green); font-size: 14px; font-weight: 800; text-decoration: none;
 }
-.landing-entry-actions { display: grid; gap: 10px; }
-.landing-demo-secondary { min-height: 46px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 14px; color: var(--muted); background: white; font-size: 12px; font-weight: 800; text-decoration: none; }
+.landing-entry-actions { width: min(100%, 390px); margin: 22px auto 0; display: grid; gap: 8px; }
+.landing-demo-secondary { min-height: 44px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); background: white; font-size: 12px; font-weight: 800; text-decoration: none; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid #8ebfff; outline-offset: 3px;
 }
@@ -367,11 +378,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .travel-date-limit { display: flex; align-items: center; gap: 5px; color: var(--green); font-size: 11px; font-weight: 600; }.travel-date-limit svg { flex: none; }.travel-date-limit b { font-weight: 800; }
 
 @media (max-width: 430px) {
-  .simple-hero { padding-top: 48px; }
-  .landing-brand { margin-bottom: 24px; }.landing-brand img { width: 48px; height: 48px; border-radius: 14px; }.landing-brand b { font-size: 21px; }
-  .simple-hero h1 { font-size: 39px; line-height: 1.12; }
-  .simple-hero > p { font-size: 15px; line-height: 1.7; }
-  .concept-flow small { font-size: 12px; }
+  .simple-hero { min-height: calc(100svh - 64px); padding: 24px 20px 28px; }
+  .landing-brand { margin-bottom: 12px; }.landing-brand img { width: 40px; height: 40px; border-radius: 12px; }.landing-brand b { font-size: 19px; }
+  .simple-hero h1 { margin: 12px 0; font-size: 36px; line-height: 1.1; letter-spacing: -2.5px; }
+  .simple-hero > p { font-size: 14px; line-height: 1.55; }
+  .concept-flow { margin-top: 20px; grid-template-columns: 1fr; gap: 6px; }
+  .concept-flow > i { display: none; }
+  .concept-flow article { min-height: 56px; padding: 9px 12px; }
+  .concept-flow article > span { width: 34px; height: 34px; }
+  .concept-flow b { font-size: 13px; }.concept-flow small { font-size: 10px; }
+  .landing-entry-actions { margin-top: 18px; }
   .final-hero h2 { font-size: 27px; line-height: 1.25; }
   .route-map { height: 340px; }
 }
