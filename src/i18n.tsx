@@ -40,6 +40,105 @@ const copy: Record<Exclude<Locale, 'ko'>, Record<string, string>> = {
   },
 }
 
+type LocalizedCopy = [en: string, traditionalChinese: string, simplifiedChinese: string, ja: string]
+
+// 화면 전환 뒤에 나타나는 문구와 오류 문구까지 한곳에서 보완합니다. 장소의 공식 상호명은
+// 검색 결과와 지도에서 대조할 수 있도록 원문을 유지하고, 서비스 UI 문구만 번역합니다.
+const supplemental: Record<string, LocalizedCopy> = {
+  '작성 중인 내용을 지우고 처음부터 다시 시작할까요?': ['Discard your changes and start over?', '要捨棄目前內容並重新開始嗎？', '要放弃当前内容并重新开始吗？', '入力中の内容を破棄して最初からやり直しますか？'],
+  '처음부터 다시 시작': ['Start over', '重新開始', '重新开始', '最初からやり直す'],
+  '앱 메뉴': ['App menu', '應用程式選單', '应用菜单', 'アプリメニュー'],
+  '전송하지 못했어요. 잠시 후 다시 시도해 주세요.': ['Could not send. Please try again shortly.', '無法送出，請稍後再試。', '无法发送，请稍后再试。', '送信できませんでした。しばらくしてからもう一度お試しください。'],
+  '여행방을 불러오지 못했습니다.': ['Could not load the trip room.', '無法載入旅程房間。', '无法加载行程房间。', '旅行ルームを読み込めませんでした。'],
+  '추천 요청이 많아 처리 순서를 기다리고 있어요. 잠시 후 다시 시도해 주세요.': ['Recommendations are busy. Please try again shortly.', '目前推薦請求較多，請稍後再試。', '当前推荐请求较多，请稍后再试。', 'おすすめ作成が混み合っています。しばらくしてからもう一度お試しください。'],
+  '경로 주변 추천을 만들지 못했습니다.': ['Could not create recommendations near the route.', '無法建立路線周邊推薦。', '无法生成路线周边推荐。', 'ルート周辺のおすすめを作成できませんでした。'],
+  '최종 일정을 불러오지 못했습니다.': ['Could not load the final itinerary.', '無法載入最終行程。', '无法加载最终行程。', '最終日程を読み込めませんでした。'],
+  '여행방에 참여하지 못했습니다.': ['Could not join the trip room.', '無法加入旅程房間。', '无法加入行程房间。', '旅行ルームに参加できませんでした。'],
+  '취향을 저장하지 못했습니다.': ['Could not save your preferences.', '無法儲存偏好。', '无法保存偏好。', '好みを保存できませんでした。'],
+  '여행방을 삭제하지 못했습니다.': ['Could not delete the trip room.', '無法刪除旅程房間。', '无法删除行程房间。', '旅行ルームを削除できませんでした。'],
+  '현재 인원으로 시작하지 못했습니다.': ['Could not start with the current group.', '目前人數無法開始。', '当前人数无法开始。', '現在の人数では開始できませんでした。'],
+  '투표를 저장하지 못했습니다.': ['Could not save your vote.', '無法儲存投票。', '无法保存投票。', '投票を保存できませんでした。'],
+  '투표 결과를 확정하지 못했습니다.': ['Could not confirm the vote result.', '無法確認投票結果。', '无法确认投票结果。', '投票結果を確定できませんでした。'],
+  '경로를 저장하지 못했습니다.': ['Could not save the route.', '無法儲存路線。', '无法保存路线。', 'ルートを保存できませんでした。'],
+  '여행방을 만들지 못했습니다.': ['Could not create the trip room.', '無法建立旅程房間。', '无法创建行程房间。', '旅行ルームを作成できませんでした。'],
+  '장소를 검색하지 못했습니다.': ['Could not search for places.', '無法搜尋地點。', '无法搜索地点。', '場所を検索できませんでした。'],
+  '요청을 처리하지 못했습니다.': ['Could not process the request.', '無法處理請求。', '无法处理请求。', 'リクエストを処理できませんでした。'],
+  '아래 초대 링크를 복사해 주세요.': ['Please copy the invitation link below.', '請複製下方邀請連結。', '请复制下方邀请链接。', '下の招待リンクをコピーしてください。'],
+  '여행방 관리': ['Trip room controls', '旅程房間管理', '行程房间管理', '旅行ルーム管理'],
+  '친구 초대 링크 복사': ['Copy invitation link', '複製好友邀請連結', '复制好友邀请链接', '招待リンクをコピー'],
+  '초대 링크 복사 완료': ['Invitation link copied', '已複製邀請連結', '已复制邀请链接', '招待リンクをコピーしました'],
+  '복사 완료': ['Copied', '已複製', '已复制', 'コピー済み'],
+  '초대': ['Invite', '邀請', '邀请', '招待'],
+  '새 여행방 만들기': ['Create another trip', '建立新旅程', '创建新行程', '新しい旅行を作る'],
+  '현재 여행방 삭제': ['Delete this trip room', '刪除此旅程房間', '删除此行程房间', 'この旅行ルームを削除'],
+  '여행방 삭제 중': ['Deleting trip room', '正在刪除旅程房間', '正在删除行程房间', '旅行ルームを削除中'],
+  '실시간 여행방': ['Live trip room', '即時旅程房間', '实时行程房间', 'リアルタイム旅行ルーム'],
+  '여행방 코드': ['Trip room code', '旅程房間代碼', '行程房间代码', '旅行ルームコード'],
+  '부산 소권역 추천': ['Busan area recommendation', '釜山區域推薦', '釜山区域推荐', '釜山エリアのおすすめ'],
+  '참여하는 중…': ['Joining…', '正在加入…', '正在加入…', '参加中…'],
+  '여행방 참여하기': ['Join trip room', '加入旅程房間', '加入行程房间', '旅行ルームに参加'],
+  '취향 입력 완료': ['Preferences complete', '偏好輸入完成', '偏好填写完成', '好みの入力完了'],
+  '취향 입력 대기 중': ['Waiting for preferences', '等待輸入偏好', '等待填写偏好', '好みの入力待ち'],
+  '대기': ['Waiting', '等待中', '等待中', '待機中'],
+  '변경 중…': ['Updating…', '更新中…', '更新中…', '変更中…'],
+  '좋아하는 음식 · 복수 선택': ['Favorite foods · Select multiple', '喜歡的食物・可複選', '喜欢的食物・可多选', '好きな食べ物・複数選択'],
+  '원하는 분위기 · 복수 선택': ['Preferred mood · Select multiple', '偏好氛圍・可複選', '偏好氛围・可多选', '希望の雰囲気・複数選択'],
+  '저장 중…': ['Saving…', '儲存中…', '保存中…', '保存中…'],
+  '취향 저장하기': ['Save preferences', '儲存偏好', '保存偏好', '好みを保存'],
+  '대중교통 이동이 짧은 부산 권역을 찾고 있어요': ['Finding Busan areas with shorter transit time', '正在尋找大眾運輸移動較短的釜山區域', '正在寻找公共交通时间较短的釜山区域', '公共交通で移動しやすい釜山エリアを検索中'],
+  '공동 1위 결선투표': ['Runoff for tied routes', '並列第一名決選', '并列第一名决选', '同率1位の決選投票'],
+  '우리 경로에 맞는 코스 3가지': ['Three routes matched to your trip', '符合旅程的三條路線', '符合行程的三条路线', '旅程に合う3つのコース'],
+  '동률인 코스 중 하나를 다시 골라 주세요.': ['Choose again from the tied routes.', '請從同票路線中再選一次。', '请从同票路线中再次选择。', '同票のコースからもう一度選んでください。'],
+  '이 코스 선택': ['Choose this route', '選擇此路線', '选择此路线', 'このコースを選ぶ'],
+  '이 코스에 투표': ['Vote for this route', '投給此路線', '投票给此路线', 'このコースに投票'],
+  '익명 투표 보내기': ['Submit anonymous vote', '送出匿名投票', '提交匿名投票', '匿名投票を送信'],
+  '최종 코스 확정하기': ['Confirm final route', '確認最終路線', '确认最终路线', '最終コースを確定'],
+  '마이페이지에 저장됨': ['Saved to My trips', '已儲存至我的旅程', '已保存到我的行程', 'マイ旅程に保存済み'],
+  '새 장소': ['New place', '新地點', '新地点', '新しい場所'],
+  '저장하고 새 여행 만들기': ['Save and create a new trip', '儲存並建立新旅程', '保存并创建新行程', '保存して新しい旅行を作る'],
+  '켜짐': ['On', '開啟', '开启', 'オン'], '꺼짐': ['Off', '關閉', '关闭', 'オフ'],
+  '마이페이지': ['My trips', '我的旅程', '我的行程', 'マイ旅程'],
+  '저장한 여행': ['Saved trips', '已儲存旅程', '已保存行程', '保存した旅行'],
+  '진행 중인 여행방': ['Active trip rooms', '進行中的旅程房間', '进行中的行程房间', '進行中の旅行ルーム'],
+  '저장한 여행이 없어요': ['No saved trips yet', '尚無已儲存旅程', '暂无已保存行程', '保存した旅行はありません'],
+  '아직 저장된 여행이 없어요': ['No trips yet', '尚無旅程', '暂无行程', '旅行はまだありません'],
+  '여행방을 확인하고 있어요.': ['Checking trip rooms.', '正在確認旅程房間。', '正在检查行程房间。', '旅行ルームを確認中です。'],
+  '어떤 방식으로 여행할까요?': ['How would you like to plan?', '想用哪種方式規劃？', '想用哪种方式规划？', 'どの方法で計画しますか？'],
+  '출발·도착 직접 설정': ['Set start and end points', '自行設定起點與終點', '自行设置起点和终点', '出発・到着地を指定'],
+  '어느 지역을 여행하고 싶나요?': ['Which area would you like to visit?', '想去哪個區域？', '想去哪个区域？', 'どのエリアを旅行しますか？'],
+  '어디서 어디로 여행할까요?': ['Where will your trip start and end?', '旅程從哪裡到哪裡？', '行程从哪里到哪里？', 'どこからどこまで旅行しますか？'],
+  '출발 장소': ['Starting place', '出發地點', '出发地点', '出発場所'], '도착 장소': ['Ending place', '到達地點', '到达地点', '到着場所'],
+  '식당·숙소·역 이름 검색': ['Search a restaurant, hotel, or station', '搜尋餐廳、住宿或車站', '搜索餐厅、住宿或车站', '飲食店・宿泊施設・駅を検索'],
+  '검색 결과가 없습니다. 더 정확한 장소명을 입력해 주세요.': ['No results. Enter a more specific place name.', '找不到結果，請輸入更精確的地點名稱。', '未找到结果，请输入更准确的地点名称。', '検索結果がありません。より正確な場所名を入力してください。'],
+  '주소 정보 없음': ['No address available', '無地址資訊', '无地址信息', '住所情報なし'],
+  '장소 추가': ['Add place', '新增地點', '添加地点', '場所を追加'],
+  '경로에 추가할 실제 장소를 검색하세요.': ['Search for a real place to add to the route.', '搜尋要加入路線的實際地點。', '搜索要添加到路线的实际地点。', 'ルートに追加する実在の場所を検索してください。'],
+  '아직 입력하지 않았어요': ['Not entered yet', '尚未輸入', '尚未填写', '未入力'], '입력하기': ['Enter now', '輸入', '填写', '入力する'],
+  '우리 취향 분석하기': ['Analyze group preferences', '分析大家的偏好', '分析大家的偏好', 'みんなの好みを分析'],
+  '그룹 취향 분석': ['Group preference summary', '團體偏好分析', '团队偏好分析', 'グループの好み分析'],
+  '맞춤 코스 추천': ['Personalized routes', '個人化路線推薦', '个性化路线推荐', 'おすすめコース'],
+  '내 마음에 드는 코스는?': ['Which route do you prefer?', '你喜歡哪條路線？', '你喜欢哪条路线？', 'どのコースが気に入りましたか？'],
+  '최대 계획 가능 날짜': ['Latest available date', '最晚可規劃日期', '最晚可规划日期', '計画可能な最終日'],
+  '함께 갈 인원': ['Number of travelers', '同行人數', '同行人数', '旅行人数'],
+  '방장': ['Host', '房主', '房主', 'ホスト'], '변경': ['Change', '變更', '更改', '変更'],
+  '구간별 예상 이동': ['Estimated travel by segment', '各區間預計移動', '各区间预计移动', '区間ごとの移動目安'],
+  '순서를 바꿀 수 있는 장소 카드': ['Reorderable place card', '可調整順序的地點卡片', '可调整顺序的地点卡片', '並べ替え可能な場所カード'],
+  '확인 중…': ['Checking…', '確認中…', '检查中…', '確認中…'],
+  '네이버 최신정보 확인': ['Check current details on Naver', '在 NAVER 查看最新資訊', '在 NAVER 查看最新信息', 'NAVERで最新情報を確認'],
+  '부산시 모범음식점': ['Busan Certified Restaurant', '釜山市模範餐廳', '釜山市示范餐厅', '釜山市模範飲食店'],
+  '도보': ['Walk', '步行', '步行', '徒歩'], '버스·도보': ['Bus + walk', '公車＋步行', '公交＋步行', 'バス＋徒歩'], '지하철·버스': ['Subway + bus', '地鐵＋公車', '地铁＋公交', '地下鉄＋バス'],
+  '맛집': ['Food', '美食', '美食', 'グルメ'], '감성 카페': ['Atmospheric cafés', '特色咖啡廳', '氛围咖啡馆', '雰囲気の良いカフェ'], '사진 명소': ['Photo spots', '拍照景點', '拍照景点', '写真スポット'], '액티비티': ['Activities', '體驗活動', '体验活动', 'アクティビティ'], '역사·문화': ['History & culture', '歷史文化', '历史文化', '歴史・文化'], '쇼핑': ['Shopping', '購物', '购物', 'ショッピング'],
+  '한식': ['Korean', '韓式料理', '韩餐', '韓国料理'], '고기·구이': ['BBQ & grilled meat', '烤肉', '烤肉', '肉・焼き物'], '해산물': ['Seafood', '海鮮', '海鲜', '海鮮'], '일식': ['Japanese', '日式料理', '日餐', '日本料理'], '중식': ['Chinese', '中式料理', '中餐', '中華料理'], '양식': ['Western', '西式料理', '西餐', '洋食'], '분식': ['Korean snacks', '韓式小吃', '韩式小吃', '韓国軽食'], '디저트·베이커리': ['Dessert & bakery', '甜點與烘焙', '甜点与烘焙', 'デザート・ベーカリー'], '채식': ['Vegetarian', '蔬食', '素食', 'ベジタリアン'],
+  '감성적인': ['Atmospheric', '有氛圍', '有氛围', '雰囲気重視'], '활기찬': ['Lively', '熱鬧', '热闹', '活気のある'], '조용한': ['Quiet', '安靜', '安静', '静か'], '로컬': ['Local', '在地', '本地', 'ローカル'],
+  '카페': ['Café', '咖啡廳', '咖啡馆', 'カフェ'], '숙소': ['Accommodation', '住宿', '住宿', '宿泊'], '교통': ['Transit', '交通', '交通', '交通'], '산책': ['Walk', '散步', '散步', '散策'], '관광': ['Sightseeing', '觀光', '观光', '観光'],
+}
+
+const localeIndex: Record<Exclude<Locale, 'ko'>, number> = { en: 0, 'zh-TW': 1, 'zh-CN': 2, ja: 3 }
+const translatedCopy = Object.fromEntries((Object.keys(localeIndex) as Array<Exclude<Locale, 'ko'>>).map((locale) => [
+  locale,
+  { ...copy[locale], ...Object.fromEntries(Object.entries(supplemental).map(([ko, values]) => [ko, values[localeIndex[locale]]])) },
+])) as Record<Exclude<Locale, 'ko'>, Record<string, string>>
+
 const I18nContext = createContext<{ locale: Locale; setLocale: (locale: Locale) => void; t: (source: string) => string }>({ locale: 'ko', setLocale: () => undefined, t: (source) => source })
 const originalText = new WeakMap<Text, string>()
 const originalAttributes = new WeakMap<Element, Map<string, string>>()
@@ -56,7 +155,7 @@ function detectLocale(): Locale {
 
 export function translateCopy(source: string, locale: Locale) {
   if (locale === 'ko') return source
-  const entries = Object.entries(copy[locale]).sort((a, b) => b[0].length - a[0].length)
+  const entries = Object.entries(translatedCopy[locale]).sort((a, b) => b[0].length - a[0].length)
   return entries.reduce((value, [ko, target]) => value.split(ko).join(target), source)
 }
 

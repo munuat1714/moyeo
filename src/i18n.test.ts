@@ -14,4 +14,15 @@ describe('internationalized interface copy', () => {
   it('keeps Korean place names while translating surrounding route copy', () => {
     expect(translateCopy('해운대 · 3개 장소', 'en')).toBe('해운대 · 3 stops')
   })
+
+  it.each(['en', 'zh-TW', 'zh-CN', 'ja'] as const)('fully translates late-screen interface copy to %s', (locale) => {
+    const phrases = [
+      '작성 중인 내용을 지우고 처음부터 다시 시작할까요?',
+      '여행방을 불러오지 못했습니다.',
+      '좋아하는 음식 · 복수 선택',
+      '대중교통 이동이 짧은 부산 권역을 찾고 있어요',
+      '전송하지 못했어요. 잠시 후 다시 시도해 주세요.',
+    ]
+    for (const phrase of phrases) expect(translateCopy(phrase, locale)).not.toMatch(/[가-힣]/)
+  })
 })
