@@ -29,7 +29,10 @@ iPhone에서는 Safari로 `/app`에 접속한 뒤 공유 메뉴의 `홈 화면�
 ## 검증 명령
 
 ```bash
+npm run lint
+npm run typecheck
 npm test
+npm run test:coverage
 npm run build
 npm run preview
 ```
@@ -158,10 +161,13 @@ npx wrangler d1 migrations apply moyeo-db --remote
 
 ## 검증 결과
 
-2026-08-04 기준:
+2026-08-14 기준:
 
-- `npm.cmd test`: 3개 테스트 파일, 15개 테스트 통과
-- `npm.cmd run build`: TypeScript 검사 및 vinext 프로덕션 빌드 통과
+- `npm.cmd run lint`: 앱·Worker 정적 검사 통과
+- `npm.cmd run typecheck`: 앱과 Cloudflare Worker 엄격한 TypeScript 검사 통과
+- `npm.cmd test`: 10개 테스트 파일, 59개 테스트 통과
+- `npm.cmd run test:coverage`: V8 커버리지 리포트 생성 통과
+- `npm.cmd run build`: vinext 프로덕션 빌드 통과
 - 로컬 D1에 공공장소·동기화 상태 테이블 마이그레이션 적용
 - 국가유산청 부산 목록 API의 실제 XML 응답과 좌표 필드 확인
 - 인증키가 필요한 TourAPI·부산맛집의 실제 동기화는 배포 환경 Secret 등록 후 확인 필요

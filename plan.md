@@ -383,6 +383,23 @@
 - [x] 여행 날짜 선택 범위를 오늘부터 1년 이내로 확대
 - [x] 최신 프로필을 앱 아이콘으로, 최신 커버를 링크 미리보기로 적용
 
+### 체크포인트 17: 구조 및 품질 자동화
+
+- [x] 익명 빠른 피드백 UI를 독립 컴포넌트로 분리
+- [x] 앱과 Cloudflare Worker의 TypeScript 검사를 별도 실행
+- [x] 여행방 생성·입력 검증·인증 경계 API 테스트 추가
+- [x] ESLint와 V8 테스트 커버리지 명령 추가
+- [x] `/api/health` 상태 코드와 운영 문서 일치
+- [x] 디자이너 전용 `design/ui-collaboration` 브랜치 분리
+
+검증:
+
+- `npm.cmd run lint`: 통과
+- `npm.cmd run typecheck`: 앱·Worker 통과
+- `npm.cmd test`: 10개 테스트 파일, 59개 테스트 통과
+- `npm.cmd run test:coverage`: 커버리지 리포트 생성 통과
+- `npm.cmd run build`: 프로덕션 빌드 통과
+
 체크포인트를 마칠 때마다 아래 형식으로 짧게 갱신한다.
 
 ```text

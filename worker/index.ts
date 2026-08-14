@@ -6,7 +6,6 @@
  * directly in wrangler.jsonc: "main": "vinext/server/app-router-entry"
  */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
-import type { ImageConfig } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import { deleteExpiredRooms, handleRoomApi } from "./rooms";
 import { cachedPlaceSearch, selectBestPlaceMatch } from "./recommendations";
@@ -248,7 +247,7 @@ export default {
       const providers = await publicDataStatus(env.DB) as any[];
       const health = evaluatePublicDataHealth(providers);
       return secured(Response.json({ ...health, status: 'ok', dataStatus: health.status }, {
-        status: 200, headers: { 'Cache-Control': 'no-store' },
+        status: health.status === 'unavailable' ? 503 : 200, headers: { 'Cache-Control': 'no-store' },
       }));
     }
 
