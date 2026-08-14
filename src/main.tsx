@@ -9,7 +9,7 @@ import {
   Save, Settings, UserRound, UsersRound, Utensils, Vote, WalletCards, WifiOff, X,
 } from 'lucide-react'
 import { courses, demoPreferences, foods, initialState, moods, themes } from './data'
-import { aggregateThemes, allPreferencesComplete, formatPrice, recommendCourses, reorderStops, tallyVotes } from './logic'
+import { aggregateThemes, allPreferencesComplete, recommendCourses, reorderStops, tallyVotes } from './logic'
 import { clearRoomToken, createLiveRoom, deleteLiveRoom, fetchLiveItinerary, fetchLiveRecommendations, fetchLiveRoom, joinLiveRoom, resolveLiveVote, saveLiveItinerary, saveLivePreference, saveRoomToken, startLiveRoomWithCurrentMembers, submitLiveVote } from './live'
 import type { LiveSnapshot } from './live'
 import type { AppState, Course, Preference, Stop } from './types'
@@ -17,6 +17,7 @@ import { deleteSavedTrip, forgetRoom, hasSavedTrip, isNativeApp, notificationsEn
 import type { RecentRoom, SavedTrip } from './mobile'
 import { apiUrl } from './runtime'
 import { naverRouteUrl, sourceDisplay, transitLeg, transitLegs } from './route-display'
+import { LanguageSelect, LocaleProvider, useI18n } from './i18n'
 import 'pretendard/dist/web/variable/pretendardvariable.css'
 import './styles.css'
 
@@ -75,6 +76,10 @@ function loadState(storageKey = SERVICE_STORAGE_KEY): AppState {
 }
 
 export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service' }) {
+  return <LocaleProvider><AppContent mode={mode} /></LocaleProvider>
+}
+
+function AppContent({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service' }) {
   const [liveRoomId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('room') ?? '')
   const [nativeMode] = useState(() => typeof window !== 'undefined' && isNativeApp())
   const appMode = mode === 'service' || nativeMode
@@ -166,11 +171,11 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service
           </button>
         ) : <img className="brand-logo" src="/social/moyeo-profile.png" alt="모행" />}
         <div className="header-title">{state.step === 'home' ? '모행' : stepTitle[state.step]}</div>
-        {state.step !== 'home' && (appMode
+        <div className="header-tools"><LanguageSelect compact />{state.step !== 'home' && (appMode
           ? <button className="icon-button subtle" aria-label="앱 홈" onClick={() => update({ step: 'home' })}><Home size={18} /></button>
           : isDemo
           ? <a className="demo-home-link" href="/"><Home size={15} /> 랜딩</a>
-          : <button className="icon-button subtle" aria-label="처음부터 다시 시작" onClick={confirmReset}><RotateCcw size={18} /></button>)}
+          : <button className="icon-button subtle" aria-label="처음부터 다시 시작" onClick={confirmReset}><RotateCcw size={18} /></button>)}</div>
       </header>
 
       <main>
@@ -190,8 +195,48 @@ export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service
         <button className={appTab === 'my' ? 'active' : ''} onClick={() => setAppTab('my')}><UserRound size={20} /><span>마이</span></button>
         <button className={appTab === 'settings' ? 'active' : ''} onClick={() => setAppTab('settings')}><Settings size={20} /><span>설정</span></button>
       </nav>}
+      {(appMode || isDemo) && <QuickFeedback screen={state.step} />}
     </div>
   )
+}
+
+function QuickFeedback({ screen }: { screen: AppState['step'] }) {
+  const { locale, t } = useI18n()
+  const [open, setOpen] = useState(false)
+  const [sentiment, setSentiment] = useState<'up' | 'down' | null>(null)
+  const [reason, setReason] = useState('')
+  const [comment, setComment] = useState('')
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [submissionKey, setSubmissionKey] = useState('')
+  const clientKind = () => isNativeApp() ? 'android_app' : /Android/i.test(navigator.userAgent) ? 'web_android' : /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'web_ios' : 'web_desktop'
+  const send = async (value: 'up' | 'down', nextReason = reason, nextComment = comment) => {
+    const key = submissionKey || globalThis.crypto?.randomUUID?.() || `feedback-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    if (!submissionKey) setSubmissionKey(key)
+    setSentiment(value); setStatus('sending')
+    try {
+      const response = await fetch(apiUrl('/api/feedback'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        sentiment: value === 'up' ? 'helpful' : 'not_helpful', reason: nextReason, comment: nextComment,
+        surface: location.pathname.startsWith('/demo') ? 'demo' : 'service', clientKind: clientKind(), submissionKey: key, screen, locale,
+      }) })
+      if (!response.ok) throw new Error('feedback-failed')
+      if (!submissionKey) track(value === 'up' ? 'feedback_helpful' : 'feedback_not_helpful')
+      setStatus('sent')
+    } catch { setStatus('error') }
+  }
+  const close = () => { setOpen(false); setSentiment(null); setReason(''); setComment(''); setStatus('idle'); setSubmissionKey('') }
+  const reasonOptions = sentiment === 'up'
+    ? [['taste', '취향에 맞아요'], ['route', '동선이 좋아요'], ['places', '장소가 좋아요']]
+    : [['distance', '거리가 멀어요'], ['taste', '취향과 달라요'], ['wrong_place', '장소 정보가 틀려요'], ['route', '이동이 불편해요'], ['other', '기타']]
+  return <>
+    <button className="feedback-launcher" aria-label={t('의견 보내기')} onClick={() => setOpen(true)}><MessageCircle size={18} /><span>{t('의견 보내기')}</span></button>
+    {open && <div className="feedback-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close() }}><section className="feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
+      <button className="feedback-modal-close" aria-label={t('닫기')} onClick={close}><X size={19} /></button>
+      <small>MOHANG FEEDBACK</small><h2 id="feedback-title">{t('이 화면은 어떠셨나요?')}</h2>
+      <div className="feedback-quick-actions"><button className={sentiment === 'up' ? 'selected' : ''} onClick={() => void send('up')}><ThumbsUp size={18} /> {t('도움 됐어요')}</button><button className={sentiment === 'down' ? 'selected' : ''} onClick={() => void send('down')}><ThumbsDown size={18} /> {t('아쉬워요')}</button></div>
+      {sentiment && <div className="feedback-followup"><p>{t(sentiment === 'up' ? '어떤 점이 좋았나요?' : '어떤 점이 아쉬웠나요?')}</p><div>{reasonOptions.map(([value, label]) => <button key={value} className={reason === value ? 'selected' : ''} onClick={() => { setReason(value); void send(sentiment, value, comment) }}>{t(label)}</button>)}</div><label><span>{t('더 알려주실 내용이 있나요?')} <small>{t('선택')}</small></span><textarea maxLength={300} value={comment} onChange={(event) => setComment(event.target.value)} placeholder={t('개인정보는 적지 말아 주세요.')} /></label><button className="feedback-detail-submit" disabled={!comment.trim() || status === 'sending'} onClick={() => void send(sentiment, reason, comment)}>{t('익명으로 의견 보내기')}</button></div>}
+      {status === 'sent' && <p className="feedback-success"><Check size={15} /> {t('의견을 익명으로 전달했어요. 고맙습니다.')}</p>}{status === 'error' && <p className="feedback-error">전송하지 못했어요. 잠시 후 다시 시도해 주세요.</p>}
+    </section></div>}
+  </>
 }
 
 const stepTitle: Record<AppState['step'], string> = {
@@ -474,7 +519,7 @@ function LiveRoomApp({ roomId, appMode = false, nativeMode = false, basePath = '
     if (await saveCurrentRoute()) window.location.assign(basePath)
   }
 
-  if (loading) return <div className="app-shell"><main className="live-state"><Sparkles /><b>여행방을 불러오는 중이에요</b></main></div>
+  if (loading) return <div className="app-shell"><main className="live-state"><Clock3 /><b>여행방을 불러오는 중이에요</b></main></div>
   if (!snapshot) return <div className="app-shell"><main className="live-state"><Clock3 /><h2>여행방을 열 수 없어요</h2><p>{error}</p><a className="primary-button" href={basePath}>새 여행방 만들기</a></main></div>
 
   const expires = new Date(snapshot.room.expiresAt * 1000).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -486,7 +531,7 @@ function LiveRoomApp({ roomId, appMode = false, nativeMode = false, basePath = '
   </section>
 
   return <div className="app-shell live-room-shell">
-    <header className="app-header"><a className="icon-button" href={basePath} aria-label={appMode ? '앱 홈' : '데모 홈'}><Home size={18} /></a><div className="header-title">{appMode ? '여행방' : '실시간 여행방'}</div><span className="live-code" title="여행방 코드">방 코드 {roomId}</span></header>
+    <header className="app-header"><a className="icon-button" href={basePath} aria-label={appMode ? '앱 홈' : '데모 홈'}><Home size={18} /></a><div className="header-title">{appMode ? '여행방' : '실시간 여행방'}</div><div className="header-tools"><span className="live-code" title="여행방 코드">{roomId}</span><LanguageSelect compact /></div></header>
     <main className="page">
       <div className="trip-summary live-trip"><span className="eyebrow dark"><CalendarDays size={14} /> {snapshot.room.startDate}</span><h2>{snapshot.room.name}</h2><div className="trip-meta"><span>{snapshot.room.routeMode === 'open' ? <><TrainFront size={15} /> {snapshot.room.preferredArea === '상관없음' ? '부산 소권역 추천' : snapshot.room.preferredArea}</> : <><MapPin size={15} /> {snapshot.room.origin} → {snapshot.room.destination}</>}</span><span><UsersRound size={15} /> {snapshot.members.length}/{snapshot.room.expectedMembers}명</span></div></div>
       <div className="expiry-notice"><Clock3 size={16} /><span><b>{expires}</b>까지 이용할 수 있으며 이후 자동 삭제됩니다.</span></div>
@@ -498,18 +543,19 @@ function LiveRoomApp({ roomId, appMode = false, nativeMode = false, basePath = '
 
         {requester && !requester.preferenceComplete && <section className="live-card live-preferences"><div className="section-heading"><h2>{requester.name}님의 여행 취향</h2><p>마음에 드는 항목을 여러 개 골라 주세요.</p></div><PreferenceGroup title="가장 가고 싶은 장소" options={themes} selected={preference.themes} onSelect={toggleTheme} icons /><PlaceCountControl openRoute={snapshot.room.routeMode === 'open'} value={preference.placeCount} onChange={(placeCount) => setPreference((current) => ({ ...current, placeCount }))} /><PreferenceGroup title="좋아하는 음식 · 복수 선택" options={foods} selected={preference.food} onSelect={(value) => setPreference((current) => ({ ...current, food: toggleSelection(current.food, value) }))} /><PreferenceGroup title="원하는 분위기 · 복수 선택" options={moods} selected={preference.mood} onSelect={(value) => setPreference((current) => ({ ...current, mood: toggleSelection(current.mood, value) }))} /><button className="primary-button" disabled={preference.themes.length === 0 || saving} onClick={savePreference}>{saving ? '저장 중…' : '취향 저장하기'} <Check size={18} /></button></section>}
 
-        {!allReady && requester?.preferenceComplete && <div className="lock-note live-wait"><Sparkles size={18} /><div><b>모두의 취향을 기다리는 중이에요</b><span>모든 인원이 참여하고 입력하면 추천 코스가 공개됩니다.</span></div></div>}
+        {!allReady && requester?.preferenceComplete && <div className="lock-note live-wait"><UsersRound size={18} /><div><b>모두의 취향을 기다리는 중이에요</b><span>모든 인원이 참여하고 입력하면 추천 코스가 공개됩니다.</span></div></div>}
 
-        {allReady && recommendationLoading && <div className="lock-note live-wait"><Sparkles size={18} /><div><b>{snapshot.room.routeMode === 'open' ? '대중교통 이동이 짧은 부산 권역을 찾고 있어요' : `${snapshot.room.origin} → ${snapshot.room.destination} 주변을 찾고 있어요`}</b><span>실제 장소 좌표와 이동 거리를 비교해 가까운 코스를 구성합니다.</span></div></div>}
+        {allReady && recommendationLoading && <div className="lock-note live-wait"><MapPin size={18} /><div><b>{snapshot.room.routeMode === 'open' ? '대중교통 이동이 짧은 부산 권역을 찾고 있어요' : `${snapshot.room.origin} → ${snapshot.room.destination} 주변을 찾고 있어요`}</b><span>실제 장소 좌표와 이동 거리를 비교해 가까운 코스를 구성합니다.</span></div></div>}
         {allReady && recommendationError && <div className="live-card recommendation-error"><b>경로 기반 추천을 만들지 못했어요</b><span>{recommendationError}</span><button className="secondary-button" onClick={() => { setRecommendationError(''); void loadRecommendations() }}>다시 추천하기</button></div>}
         {allReady && routeCourses && !finalCourse && <section className="live-section"><div className="section-heading"><h2>{snapshot.room.voteRound === 2 ? '공동 1위 결선투표' : '우리 경로에 맞는 코스 3가지'}</h2><p>{snapshot.room.voteRound === 2 ? '동률인 코스 중 하나를 다시 골라 주세요.' : recommendationSummary}</p></div><div className="live-course-list">{availableCourses.map((course) => <div key={course.id}><CourseCard course={course} expanded={expandedCourseId === course.id} onToggle={() => setExpandedCourseId((current) => current === course.id ? '' : course.id)} />{!snapshot.hasVoted && <button className={`live-vote-choice ${selectedCourseId === course.id ? 'selected' : ''}`} onClick={() => setSelectedCourseId(course.id)}>{selectedCourseId === course.id && <Check size={15} />} {soloTrip ? '이 코스 선택' : '이 코스에 투표'}</button>}</div>)}</div>{snapshot.hasVoted && !snapshot.allVoted && <div className="lock-note"><Vote size={18} /><div><b>내 투표를 저장했어요</b><span>모두 투표할 때까지 선택은 공개되지 않습니다.</span></div></div>}{!snapshot.hasVoted && <button className="primary-button sticky-action" disabled={!selectedCourseId || working} onClick={vote}>{soloTrip ? '투표하기' : '익명 투표 보내기'} <Vote size={18} /></button>}{snapshot.allVoted && <><div className="result-list">{availableCourses.map((course) => <div key={course.id}><span>{course.emoji}</span><div><b>{course.title}</b><div className="vote-bar"><i style={{ width: `${((voteCounts[course.id] ?? 0) / snapshot.members.length) * 100}%` }} /></div></div><strong>{voteCounts[course.id] ?? 0}표</strong></div>)}</div><button className="primary-button sticky-action" disabled={working} onClick={resolve}>{snapshot.room.voteRound === 1 ? '결과 확인하기' : '최종 코스 확정하기'} <ArrowRight size={18} /></button></>}</section>}
 
-        {finalCourse && !showFinalRoute && <section className="live-section"><button className="confirmed-route-card" onClick={() => setShowFinalRoute(true)}><span className="result-icon"><Check /></span><span><small>취향 분석과 투표가 끝났어요</small><b>확정된 경로 보기</b><em>{finalCourse.title} · 취향 일치 {finalCourse.match}%</em></span><ArrowRight size={20} /></button></section>}
-        {finalCourse && showFinalRoute && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 당일치기 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.startDate} · {snapshot.members.length}명 · 취향 일치 {finalCourse.match}%</p></div>{appMode && <button className={`save-route-button ${routeSaved ? 'saved' : ''}`} disabled={savingRoute} onClick={() => void saveCurrentRoute()}>{routeSaved ? <Check size={17} /> : <Save size={17} />}{routeSaved ? '마이페이지에 저장됨' : savingRoute ? '저장 중…' : '마이페이지에 경로 저장'}</button>}<div className="final-route-heading"><Map size={16} /><b>최종 경로</b></div><RouteMap stops={(itinerary ?? finalCourse.days)[finalDay]} />{(itinerary ?? finalCourse.days).length > 1 ? <div className="day-switch">{(itinerary ?? finalCourse.days).map((_, index) => <button key={index} className={finalDay === index ? 'active' : ''} onClick={() => { setFinalDay(index); setEditingStop(null); setAddingStop(false) }}>DAY {index + 1}</button>)}</div> : <div className="single-day-label"><CalendarDays size={15} /> 당일 일정</div>}{requester?.host && <div className="route-edit-notice"><Sparkles size={15} /><span>장소 순서를 바꾸거나 실제 장소를 추가·변경·삭제할 수 있어요.{itinerarySaving ? ' 저장 중…' : ''}</span></div>}<Timeline stops={(itinerary ?? finalCourse.days)[finalDay]} onMove={requester?.host ? (index, direction) => moveStop(finalDay, index, direction) : undefined} onEdit={requester?.host ? (index) => { setAddingStop(false); setEditingStop({ day: finalDay, index }) } : undefined} onRemove={requester?.host ? (index) => removeStop(finalDay, index) : undefined} disabled={itinerarySaving} renderAfter={(index) => editingStop?.day === finalDay && editingStop.index === index ? <RoutePlaceEditor current={(itinerary ?? finalCourse.days)[finalDay][index]} onCancel={() => setEditingStop(null)} onSelect={replaceStop} /> : null} />{requester?.host && <><button className="add-route-stop-button" disabled={itinerarySaving} onClick={() => { setEditingStop(null); setAddingStop(true) }}><Plus size={17} /> 장소 추가</button>{addingStop && <RoutePlaceEditor current={{ ...(itinerary ?? finalCourse.days)[finalDay].at(-1)!, title: '새 장소' }} onCancel={() => setAddingStop(false)} onSelect={addStop} />}</>}</section>}
+        {finalCourse && !showFinalRoute && <section className="live-section"><button className="confirmed-route-card" onClick={() => setShowFinalRoute(true)}><span className="result-icon"><Check /></span><span><small>모든 투표가 끝났어요</small><b>확정된 경로 보기</b><em>{finalCourse.title} · {finalCourse.days[0].length}개 장소</em></span><ArrowRight size={20} /></button></section>}
+        {finalCourse && showFinalRoute && <section className="live-section"><div className="final-hero live-final"><span className="eyebrow dark"><Check size={14} /> 투표로 확정된 당일치기 여행</span><h2>{finalCourse.title}</h2><p>{snapshot.room.startDate} · {snapshot.members.length}명 · 선택 조건 반영</p></div>{appMode && <button className={`save-route-button ${routeSaved ? 'saved' : ''}`} disabled={savingRoute} onClick={() => void saveCurrentRoute()}>{routeSaved ? <Check size={17} /> : <Save size={17} />}{routeSaved ? '마이페이지에 저장됨' : savingRoute ? '저장 중…' : '마이페이지에 경로 저장'}</button>}<div className="final-route-heading"><Map size={16} /><b>최종 경로</b></div><RouteMap stops={(itinerary ?? finalCourse.days)[finalDay]} />{(itinerary ?? finalCourse.days).length > 1 ? <div className="day-switch">{(itinerary ?? finalCourse.days).map((_, index) => <button key={index} className={finalDay === index ? 'active' : ''} onClick={() => { setFinalDay(index); setEditingStop(null); setAddingStop(false) }}>DAY {index + 1}</button>)}</div> : <div className="single-day-label"><CalendarDays size={15} /> 당일 일정</div>}{requester?.host && <div className="route-edit-notice"><MapPin size={15} /><span>장소 순서를 바꾸거나 실제 장소를 추가·변경·삭제할 수 있어요.{itinerarySaving ? ' 저장 중…' : ''}</span></div>}<Timeline stops={(itinerary ?? finalCourse.days)[finalDay]} onMove={requester?.host ? (index, direction) => moveStop(finalDay, index, direction) : undefined} onEdit={requester?.host ? (index) => { setAddingStop(false); setEditingStop({ day: finalDay, index }) } : undefined} onRemove={requester?.host ? (index) => removeStop(finalDay, index) : undefined} disabled={itinerarySaving} renderAfter={(index) => editingStop?.day === finalDay && editingStop.index === index ? <RoutePlaceEditor current={(itinerary ?? finalCourse.days)[finalDay][index]} onCancel={() => setEditingStop(null)} onSelect={replaceStop} /> : null} />{requester?.host && <><button className="add-route-stop-button" disabled={itinerarySaving} onClick={() => { setEditingStop(null); setAddingStop(true) }}><Plus size={17} /> 장소 추가</button>{addingStop && <RoutePlaceEditor current={{ ...(itinerary ?? finalCourse.days)[finalDay].at(-1)!, title: '새 장소' }} onCancel={() => setAddingStop(false)} onSelect={addStop} />}</>}</section>}
         {finalCourse && <div className="final-room-controls">{roomControls}</div>}
       </>}
     </main>
     {showNewTripPrompt && <div className="save-before-new-backdrop" role="presentation" onClick={() => setShowNewTripPrompt(false)}><section className="save-before-new-dialog" role="dialog" aria-modal="true" aria-labelledby="save-before-new-title" onClick={(event) => event.stopPropagation()}><span className="result-icon"><Save /></span><h2 id="save-before-new-title">확정 경로를 저장할까요?</h2><p>여행방은 7일 뒤 삭제됩니다. 마이페이지에 저장하면 이 기기에서 계속 확인할 수 있어요.</p><button className="primary-button" disabled={savingRoute} onClick={() => void saveAndStartNew()}>{savingRoute ? '저장 중…' : '저장하고 새 여행 만들기'}</button><button className="outline-button" onClick={() => window.location.assign(basePath)}>저장하지 않고 새 여행 만들기</button><button className="text-button" onClick={() => setShowNewTripPrompt(false)}>취소</button></section></div>}
+    <QuickFeedback screen={finalCourse ? 'final' : routeCourses ? 'courses' : 'room'} />
   </div>
 }
 
@@ -565,7 +611,7 @@ function SavedTripList({ trips, onDelete }: { trips: SavedTrip[]; onDelete: (id:
 }
 
 function RecentRoomList({ rooms, loading, onOpen, compact = false }: { rooms: RecentRoom[]; loading: boolean; onOpen: (id: string) => void; compact?: boolean }) {
-  if (loading) return <div className="native-room-empty"><Sparkles size={20} /><span>여행방을 확인하고 있어요.</span></div>
+  if (loading) return <div className="native-room-empty"><Clock3 size={20} /><span>여행방을 확인하고 있어요.</span></div>
   if (!rooms.length) return <div className="native-room-empty"><Map size={22} /><b>아직 저장된 여행이 없어요</b><span>여행방을 만들거나 초대 코드로 참여해 보세요.</span></div>
   return <div className={`native-room-list ${compact ? 'compact' : ''}`}>{rooms.map((room) => <button key={room.id} onClick={() => onOpen(room.id)}><span className="native-room-date"><CalendarDays size={15} />{room.startDate.slice(5).replace('-', '.')}</span><span><b>{room.name}</b><small>방 코드 {room.id} · {new Date(room.expiresAt * 1000).toLocaleDateString('ko-KR')} 삭제</small></span><ChevronRight size={19} /></button>)}</div>
 }
@@ -578,13 +624,13 @@ function HomeScreen() {
           <img src="/social/moyeo-profile.png" alt="" />
           <span><b>모행</b><small>MOHANG</small></span>
         </div>
-        <span className="eyebrow"><Sparkles size={14} /> 친구 취향으로 완성하는 여행</span>
+        <span className="eyebrow"><MapPin size={14} /> 친구 취향으로 완성하는 여행</span>
         <h1>여행 계획,<br /><em>모두의 취향</em>에서 시작해요.</h1>
         <p>친구들의 취향을 모아 가까운 부산 코스를 추천하고, 투표로 함께 결정하는 당일치기 여행 서비스예요.</p>
         <div className="concept-flow" aria-label="모행 이용 개요">
           <article><span><UsersRound size={20} /></span><div><b>취향 선택</b><small>각자 원하는 여행을 골라요</small></div></article>
           <i><ArrowRight size={17} /></i>
-          <article><span><Sparkles size={20} /></span><div><b>코스 추천</b><small>가까운 실제 장소를 모아요</small></div></article>
+          <article><span><Map size={20} /></span><div><b>코스 추천</b><small>가까운 실제 장소를 모아요</small></div></article>
           <i><ArrowRight size={17} /></i>
           <article><span><Vote size={20} /></span><div><b>함께 결정</b><small>투표로 최종 경로를 정해요</small></div></article>
         </div>
@@ -872,16 +918,16 @@ function Analysis({ state, onNext }: { state: AppState; onNext: () => void }) {
   return (
     <section className="page analysis-page">
       <Progress current={3} total={4} label="그룹 취향 분석" />
-      <div className="section-heading center"><span className="result-icon"><Sparkles /></span><h2>우리 취향이 모였어요!</h2><p>4명의 선택에서 공통점과 특별한 취향을 찾았어요.</p></div>
+      <div className="section-heading center"><span className="result-icon"><Check /></span><h2>선택 내용을 정리했어요</h2><p>{state.members.length}명의 응답에서 공통 조건을 확인했어요.</p></div>
       <div className="taste-chart">
         {aggregated.map(({ theme, count }, index) => (
           <div className="taste-row" key={theme}>
-            <div><span>{index === 0 ? '🏆' : index === 1 ? '✨' : '·'}</span><b>{theme}</b><small>{count}명 선택</small></div>
+            <div><span>{index + 1}</span><b>{theme}</b><small>{count}명 선택</small></div>
             <div className="taste-bar"><i style={{ width: `${count / state.members.length * 100}%` }} /></div>
           </div>
         ))}
       </div>
-      <div className="insight-card"><div className="insight-title"><Sparkles size={17} /> 분석 한 줄</div><p><b>{top?.theme}</b>은 모두가 좋아하고, 감성 카페와 사진도 인기예요. 현우의 액티비티와 서준의 역사 취향은 특별 옵션으로 챙겼어요.</p></div>
+      <div className="insight-card"><div className="insight-title"><MapPin size={17} /> 추천 기준</div><p><b>{top?.theme}</b> 선호와 방문 장소 수를 먼저 반영하고, 실제 장소 사이의 이동 거리가 짧도록 구성합니다.</p></div>
       <button className="primary-button sticky-action" onClick={onNext}>맞춤 코스 3개 보기 <ArrowRight size={18} /></button>
     </section>
   )
@@ -892,12 +938,11 @@ function Courses({ courses, selected, setSelected, onVote }: { courses: Course[]
   return (
     <section className="page courses-page">
       <Progress current={4} total={4} label="맞춤 코스 추천" />
-      <div className="section-heading"><h2>우리에게 맞는 3가지 코스</h2><p><b>60%는 함께</b>, 나머지 40%는 취향에 따라 달라요.</p></div>
+      <div className="section-heading"><h2>조건에 맞는 3가지 코스</h2><p>선택한 취향과 장소 사이의 이동 거리를 함께 비교했어요.</p></div>
       <div className="course-tabs">
-        {courses.map((course) => <button aria-pressed={selected.id === course.id} key={course.id} className={selected.id === course.id ? 'active' : ''} onClick={() => { setSelected(course); setDetail(false) }}><span>{course.emoji}</span>{course.title.split(' ')[0]}</button>)}
+        {courses.map((course) => <button aria-pressed={selected.id === course.id} key={course.id} className={selected.id === course.id ? 'active' : ''} onClick={() => { setSelected(course); setDetail(false) }}>{course.title.split(' ')[0]}</button>)}
       </div>
       <CourseCard course={selected} expanded={detail} onToggle={() => setDetail(!detail)} />
-      <div className="common-note"><span>60%</span><div><b>세 코스가 함께 가는 곳</b><p>감천문화마을 · 자갈치시장 · 전포카페거리 · 광안리해수욕장</p></div></div>
       <div className="data-notice"><ShieldCheck size={15} /><span>공식 관광정보를 바탕으로 구성했으며, 운영시간·요금·교통은 네이버지도에서 방문 전에 다시 확인해 주세요.</span></div>
       <button className="primary-button sticky-action" onClick={onVote}>친구들과 투표하기 <Vote size={18} /></button>
     </section>
@@ -911,7 +956,7 @@ function CourseCard({ course, expanded, onToggle }: { course: Course; expanded: 
       <div className="course-hero">
         <span className="course-emoji">{course.emoji}</span>
         <div><span className="course-label">{course.label}</span><h3>{course.title}</h3><p>{course.description}</p></div>
-        <div className="match-score"><b>{course.match}%</b><span>취향 일치</span></div>
+        <div className="match-score"><b>조건 반영</b><span>{course.tags.length}개 기준</span></div>
       </div>
       <div className="tag-row">{course.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
       <div className="course-place-preview"><MapPin size={15} /><div><small>방문 장소</small><p>{course.days[0].map((stop) => stop.title).join(' → ')}</p></div></div>
@@ -962,7 +1007,7 @@ function Voting({ courses, state, setState }: { courses: Course[]; state: AppSta
       </> : <>
         <div className="section-heading center"><span className="result-icon coral"><Check /></span><h2>투표가 끝났어요!</h2><p>친구들의 선택을 지금 공개할게요.</p></div>
         <div className="result-list">{courses.map((course) => <div key={course.id} className={result.winners.includes(course.id) ? 'winner' : ''}><span>{course.emoji}</span><div><b>{course.title}</b><div className="vote-bar"><i style={{ width: `${((result.counts[course.id] ?? 0) / state.members.length) * 100}%` }} /></div></div><strong>{result.counts[course.id] ?? 0}표</strong></div>)}</div>
-        {result.tied && <div className="safety-note"><b>공동 1위예요</b><span>{state.voteRound === 1 ? '공동 1위 코스만 남겨 결선투표를 진행해요.' : '결선도 동률이라 취향 일치율이 높은 코스를 추천해요.'}</span></div>}
+        {result.tied && <div className="safety-note"><b>공동 1위예요</b><span>{state.voteRound === 1 ? '공동 1위 코스만 남겨 결선투표를 진행해요.' : '결선도 동률이라 선택 조건이 더 많이 반영된 코스를 추천해요.'}</span></div>}
         {result.tied && state.voteRound === 1
           ? <button className="primary-button sticky-action" onClick={startRunoff}>결선투표 시작하기 <Vote size={18} /></button>
           : <button className="primary-button sticky-action" onClick={finalize}>{result.tied ? '추천 코스로 확정하기' : '1위 코스로 확정하기'} <ArrowRight size={18} /></button>}
@@ -972,16 +1017,14 @@ function Voting({ courses, state, setState }: { courses: Course[]; state: AppSta
 }
 
 function FinalTrip({ courses, state, setState, tab, setTab }: { courses: Course[]; state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>>; tab: 'schedule' | 'map' | 'booking'; setTab: (t: 'schedule' | 'map' | 'booking') => void }) {
+  const { locale } = useI18n()
   const course = courses.find((c) => c.id === state.finalCourseId) ?? courses[0]
-  const [day, setDay] = useState(0)
-  const [schedule, setSchedule] = useState<Stop[][]>(() => course.days.map((items) => [...items]))
+  const day = 0
+  const [schedule, setSchedule] = useState<Stop[][]>(() => [course.days[0].map((item) => ({ ...item }))])
   const [copied, setCopied] = useState(false)
-  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null)
-  const [feedbackReason, setFeedbackReason] = useState('')
-  const [feedbackComment, setFeedbackComment] = useState('')
-  const [feedbackStatus, setFeedbackStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
-  const [interest, setInterest] = useState<'beta' | 'interview' | null>(null)
   const reservable = course.days.flat().filter((stop) => stop.reservable)
+  const preferenceCount = new Set(state.members.flatMap((member) => member.preference ? [...member.preference.themes, ...member.preference.food, ...member.preference.mood] : [])).size
+  const travelDateLabel = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(`${state.trip.startDate}T00:00:00`))
   const book = (title: string) => setState((s) => ({ ...s, booked: s.booked.includes(title) ? s.booked : [...s.booked, title] }))
   const removeStop = (index: number) => {
     setSchedule((current) => current.map((items, dayIndex) => dayIndex === day ? items.filter((_, stopIndex) => stopIndex !== index) : items))
@@ -1001,41 +1044,12 @@ function FinalTrip({ courses, state, setState, tab, setTab }: { courses: Course[
       window.prompt('아래 일정을 복사해 주세요.', text)
     }
   }
-  const answerFeedback = (value: 'up' | 'down') => {
-    setFeedback(value)
-    setFeedbackReason('')
-    setFeedbackStatus('idle')
-  }
-  const submitFeedback = async () => {
-    if (!feedback || feedbackStatus === 'sending') return
-    setFeedbackStatus('sending')
-    const userAgent = navigator.userAgent
-    const clientKind = isNativeApp() ? 'android_app' : /Android/i.test(userAgent) ? 'web_android' : /iPhone|iPad|iPod/i.test(userAgent) ? 'web_ios' : 'web_desktop'
-    try {
-      const response = await fetch(apiUrl('/api/feedback'), {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sentiment: feedback === 'up' ? 'helpful' : 'not_helpful', reason: feedbackReason,
-          comment: feedbackComment, surface: window.location.pathname.startsWith('/demo') ? 'demo' : 'service', clientKind,
-        }),
-      })
-      if (!response.ok) throw new Error('feedback-failed')
-      localStorage.setItem('modu-trip-feedback-v2', JSON.stringify({ value: feedback, at: new Date().toISOString() }))
-      track(feedback === 'up' ? 'feedback_helpful' : 'feedback_not_helpful')
-      setFeedbackStatus('sent')
-    } catch { setFeedbackStatus('error') }
-  }
-  const chooseInterest = (value: 'beta' | 'interview') => {
-    setInterest(value)
-    localStorage.setItem('modu-trip-interest-v1', value)
-    track(value === 'beta' ? 'beta_interest' : 'interview_interest')
-  }
   return (
     <section className="final-page">
       <div className="final-hero">
-        <span className="eyebrow dark"><Check size={14} /> 투표로 확정된 여행</span>
-        <h2>{state.trip.destination}, 우리답게!</h2>
-        <p>{course.title} · 취향 일치 {course.match}%</p>
+        <span className="eyebrow dark"><Check size={14} /> 최종 여행 경로</span>
+        <h2>{state.trip.name}</h2>
+        <p>{travelDateLabel} · 선택 조건 {preferenceCount}개 반영</p>
         <div className="final-people">{state.members.map((m) => <Avatar key={m.id} member={m} compact />)}<span>{state.members.length}명이 함께</span></div>
       </div>
       <div className="final-tabs">
@@ -1043,33 +1057,9 @@ function FinalTrip({ courses, state, setState, tab, setTab }: { courses: Course[
         <button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}><Map size={17} />동선</button>
         <button className={tab === 'booking' ? 'active' : ''} onClick={() => setTab('booking')}><WalletCards size={17} />예약</button>
       </div>
-      {tab === 'schedule' && <div className="final-content"><div className="day-switch"><button className={day === 0 ? 'active' : ''} onClick={() => setDay(0)}>DAY 1 <small>8.15 토</small></button><button className={day === 1 ? 'active' : ''} onClick={() => setDay(1)}>DAY 2 <small>8.16 일</small></button></div><Timeline stops={schedule[day]} onRemove={removeStop} /><button className="outline-button copy-plan" onClick={copyPlan}>{copied ? <Check size={17} /> : <Copy size={17} />}{copied ? '일정을 복사했어요' : '전체 일정 복사하기'}</button></div>}
-      {tab === 'map' && <div className="final-content"><RouteMap stops={schedule[day]} /><div className="map-summary"><b>DAY {day + 1} 이동 요약</b><span><TrainFront size={15} /> 예상 {day === 0 ? 72 : 46}분 · {schedule[day].length}개 장소</span></div><p className="map-disclaimer">표시된 선은 장소 순서를 나타냅니다. 실제 도보·대중교통 경로와 시간은 네이버지도에서 확인해 주세요.</p></div>}
-      {tab === 'booking' && <div className="final-content"><div className="section-title-row"><h3>예약이 필요한 항목</h3><span className="count-badge">{state.booked.length}/{reservable.length}</span></div><div className="booking-list">{reservable.map((stop) => <div key={stop.title}><span className="booking-icon">{stop.category === '교통' ? <TrainFront /> : stop.category === '숙소' ? <Home /> : <Compass />}</span><div><small>{stop.category} · {stop.time}</small><b>{stop.title}</b><span>{formatPrice(stop.price)}</span></div>{state.booked.includes(stop.title) ? <span className="booked"><Check size={14} /> 완료</span> : <button onClick={() => book(stop.title)}>예약 연결</button>}</div>)}</div><div className="booking-notice">실제 결제는 진행되지 않는 MVP 시뮬레이션입니다.</div></div>}
-      <div className="validation-panel">
-        <section className="feedback-card">
-          <span>30초만 도와주세요</span><h3>이 일정이 실제 여행 계획에 도움이 됐나요?</h3>
-          <div><button className={feedback === 'up' ? 'selected' : ''} onClick={() => answerFeedback('up')}><ThumbsUp size={18} /> 도움 됐어요</button><button className={feedback === 'down' ? 'selected' : ''} onClick={() => answerFeedback('down')}><ThumbsDown size={18} /> 아쉬워요</button></div>
-          {feedback && feedbackStatus !== 'sent' && <div className="feedback-details">
-            <b>{feedback === 'up' ? '어떤 점이 좋았나요?' : '어떤 점이 아쉬웠나요?'}</b>
-            <div className="feedback-reasons">{(feedback === 'up'
-              ? [['taste', '취향에 맞아요'], ['route', '동선이 좋아요'], ['places', '장소가 좋아요']]
-              : [['distance', '거리가 멀어요'], ['taste', '취향과 달라요'], ['wrong_place', '장소 정보가 틀려요'], ['route', '이동이 불편해요'], ['other', '기타']]
-            ).map(([value, label]) => <button type="button" key={value} className={feedbackReason === value ? 'selected' : ''} onClick={() => setFeedbackReason(value)}>{label}</button>)}</div>
-            <label><span>더 알려주실 내용이 있나요? <small>선택</small></span><textarea maxLength={300} value={feedbackComment} onChange={(event) => setFeedbackComment(event.target.value)} placeholder="개인정보는 적지 말아 주세요." /></label>
-            <button type="button" className="feedback-submit" onClick={submitFeedback} disabled={feedbackStatus === 'sending'}>{feedbackStatus === 'sending' ? '보내는 중…' : '익명으로 의견 보내기'}</button>
-            {feedbackStatus === 'error' && <p className="feedback-error">전송하지 못했어요. 잠시 후 다시 시도해 주세요.</p>}
-          </div>}
-          {feedbackStatus === 'sent' && <p><Check size={14} /> 의견을 익명으로 전달했어요. 고맙습니다.</p>}
-        </section>
-        <section className="interest-card">
-          <span className="eyebrow dark"><Sparkles size={14} /> 다음 단계에 함께해요</span>
-          <h3>모행을 더 먼저 만나보세요.</h3><p>연락처를 받지 않고 관심 의사만 확인합니다. 정식 모집 링크가 준비되면 이 화면에 연결할 예정이에요.</p>
-          <div className="interest-actions"><button onClick={() => chooseInterest('beta')}><ExternalLink size={17} /> 베타 참여에 관심 있어요</button><button onClick={() => chooseInterest('interview')}><MessageCircle size={17} /> 15분 인터뷰에 관심 있어요</button></div>
-          {interest && <div className="interest-confirm"><Check size={16} /><span>{interest === 'beta' ? '베타 참여' : '인터뷰 참여'} 관심을 익명 합계에 반영했어요.</span></div>}
-          <small><ShieldCheck size={14} /> 여행 정보와 응답은 현재 사용 중인 브라우저에만 저장됩니다.</small>
-        </section>
-      </div>
+      {tab === 'schedule' && <div className="final-content"><div className="single-day-label"><CalendarDays size={16} /><b>{travelDateLabel}</b><span>당일 일정</span></div><Timeline stops={schedule[day]} onRemove={removeStop} /><button className="outline-button copy-plan" onClick={copyPlan}>{copied ? <Check size={17} /> : <Copy size={17} />}{copied ? '일정을 복사했어요' : '전체 일정 복사하기'}</button></div>}
+      {tab === 'map' && <div className="final-content"><RouteMap stops={schedule[day]} /><div className="map-summary"><b>당일 이동 요약</b><span><TrainFront size={15} /> {schedule[day].length}개 장소</span></div><p className="map-disclaimer">도로 경로와 구간별 이동수단을 함께 표시합니다. 출발 전 실제 운행 정보는 지도에서 다시 확인해 주세요.</p></div>}
+      {tab === 'booking' && <div className="final-content"><div className="section-title-row"><h3>방문 전 확인할 장소</h3><span className="count-badge">{state.booked.length}/{reservable.length}</span></div><div className="booking-list">{reservable.map((stop) => <div key={stop.title}><span className="booking-icon">{stop.category === '교통' ? <TrainFront /> : stop.category === '숙소' ? <Home /> : <Compass />}</span><div><small>{stop.category} · {stop.time}</small><b>{stop.title}</b></div>{state.booked.includes(stop.title) ? <span className="booked"><Check size={14} /> 확인</span> : <button onClick={() => book(stop.title)}>정보 확인</button>}</div>)}</div><div className="booking-notice">운영시간과 예약 가능 여부는 방문 전 해당 장소에서 확인해 주세요.</div></div>}
     </section>
   )
 }

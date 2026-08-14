@@ -96,25 +96,56 @@ export default {
       }
     }
 
+    if (url.pathname === "/api/usage" && request.method === "POST") {
+      const limited = await rateLimitResponse(env.DB, 'usage:global', 5000, 3600);
+      if (limited) return secured(limited);
+      try {
+        const body = await request.json<{ locale?: string; surface?: string }>();
+        const locales = new Set(['ko', 'en', 'zh-TW', 'zh-CN', 'ja']);
+        const surfaces = new Set(['landing', 'service', 'demo']);
+        const locale = locales.has(body.locale ?? '') ? body.locale! : 'ko';
+        const surface = surfaces.has(body.surface ?? '') ? body.surface! : 'service';
+        const cfCountry = (request as Request & { cf?: { country?: string } }).cf?.country ?? 'XX';
+        const country = /^[A-Z]{2}$/.test(cfCountry) ? cfCountry : 'XX';
+        const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+        const now = Math.floor(Date.now() / 1000);
+        await env.DB.prepare(`INSERT INTO anonymous_usage_counts
+          (usage_date,country_code,locale,surface,session_count,updated_at) VALUES (?1,?2,?3,?4,1,?5)
+          ON CONFLICT(usage_date,country_code,locale,surface) DO UPDATE SET session_count=session_count+1,updated_at=excluded.updated_at`)
+          .bind(day, country, locale, surface, now).run();
+        return secured(Response.json({ ok: true }, { status: 202, headers: { 'Cache-Control': 'no-store' } }));
+      } catch {
+        return secured(Response.json({ error: '사용 통계를 기록하지 못했습니다.' }, { status: 400 }));
+      }
+    }
+
     if (url.pathname === "/api/feedback" && request.method === "POST") {
       const limited = await rateLimitResponse(env.DB, 'feedback:global', 2000, 3600);
       if (limited) return secured(limited);
       try {
-        const body = await request.json<{ sentiment?: string; reason?: string; comment?: string; surface?: string; clientKind?: string }>();
+        const body = await request.json<{ sentiment?: string; reason?: string; comment?: string; surface?: string; clientKind?: string; submissionKey?: string; screen?: string; locale?: string }>();
         const sentiments = new Set(['helpful', 'not_helpful']);
         const reasons = new Set(['taste', 'route', 'places', 'distance', 'wrong_place', 'other', '']);
         const surfaces = new Set(['service', 'demo']);
         const clientKinds = new Set(['android_app', 'web_android', 'web_ios', 'web_desktop', 'web']);
+        const locales = new Set(['ko', 'en', 'zh-TW', 'zh-CN', 'ja']);
         if (!body.sentiment || !sentiments.has(body.sentiment)) return Response.json({ error: '만족도를 선택해 주세요.' }, { status: 400 });
         const reason = reasons.has(body.reason ?? '') ? body.reason ?? '' : '';
         const surface = surfaces.has(body.surface ?? '') ? body.surface! : 'service';
         const clientKind = clientKinds.has(body.clientKind ?? '') ? body.clientKind! : 'web';
+        const locale = locales.has(body.locale ?? '') ? body.locale! : 'ko';
+        const submissionKey = String(body.submissionKey ?? '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+        const screen = String(body.screen ?? '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
         const comment = String(body.comment ?? '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
         const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-        await env.DB.prepare(`INSERT INTO anonymous_feedback
-          (feedback_date,sentiment,reason,comment,surface,client_kind,created_at)
-          VALUES (?1,?2,?3,?4,?5,?6,?7)`)
-          .bind(day, body.sentiment, reason, comment, surface, clientKind, Math.floor(Date.now() / 1000)).run();
+        const now = Math.floor(Date.now() / 1000);
+        let updated = { meta: { changes: 0 } } as { meta: { changes: number } };
+        if (submissionKey) updated = await env.DB.prepare(`UPDATE anonymous_feedback SET sentiment=?1,reason=?2,comment=?3,surface=?4,client_kind=?5,screen=?6,locale=?7,created_at=?8 WHERE submission_key=?9`)
+          .bind(body.sentiment, reason, comment, surface, clientKind, screen, locale, now, submissionKey).run() as typeof updated;
+        if (!updated.meta.changes) await env.DB.prepare(`INSERT INTO anonymous_feedback
+          (feedback_date,sentiment,reason,comment,surface,client_kind,created_at,submission_key,screen,locale)
+          VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)`)
+          .bind(day, body.sentiment, reason, comment, surface, clientKind, now, submissionKey, screen, locale).run();
         return secured(Response.json({ ok: true }, { status: 201, headers: { 'Cache-Control': 'no-store' } }));
       } catch {
         return secured(Response.json({ error: '피드백 내용을 확인해 주세요.' }, { status: 400 }));

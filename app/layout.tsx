@@ -6,7 +6,7 @@ import { PwaRegistration } from '../src/pwa-registration'
 
 const baseMetadata = {
   title: '모행 | 친구 취향으로 완성하는 여행',
-  description: '각자 취향을 고르면 모두가 좋아할 1박 2일 코스를 비교하고 투표로 결정하는 여행 큐레이션 MVP',
+  description: '친구들의 취향과 실제 이동 거리를 바탕으로 부산 당일치기 코스를 비교하고 함께 결정하는 여행 서비스',
 }
 
 export async function generateMetadata(): Promise<Metadata> {

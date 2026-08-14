@@ -381,6 +381,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .travel-date-note { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .travel-date-limit { display: flex; align-items: center; gap: 5px; color: var(--green); font-size: 11px; font-weight: 600; }.travel-date-limit svg { flex: none; }.travel-date-limit b { font-weight: 800; }
 
+/* International, low-friction controls and feedback. */
+html:lang(ja) body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif; }
+html:lang(zh-TW) body { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif; }
+html:lang(zh-CN) body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+.header-tools { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.language-select { min-height: 40px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--muted); }
+.language-select select { max-width: 104px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 11px; font-weight: 700; }
+.language-select.compact { min-height: 36px; padding-inline: 7px; }.language-select.compact select { max-width: 76px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+.feedback-launcher { position: fixed; z-index: 28; right: max(16px, calc((100vw - 430px) / 2 + 16px)); bottom: 18px; min-height: 44px; display: flex; align-items: center; gap: 7px; padding: 0 14px; border: 1px solid #cfd5dc; border-radius: 12px; color: var(--ink); background: #fff; box-shadow: 0 6px 20px #19202a1a; font-size: 11px; font-weight: 800; }
+.native-app-mode .feedback-launcher { bottom: 82px; }
+.feedback-modal-backdrop { position: fixed; z-index: 80; inset: 0; display: grid; place-items: end center; padding: 18px; background: #11182766; }
+.feedback-modal { position: relative; width: min(100%, 410px); max-height: calc(100svh - 36px); overflow: auto; padding: 25px 20px 20px; border-radius: 16px; background: #fff; box-shadow: 0 22px 70px #0004; }
+.feedback-modal > small { color: var(--green); font-size: 10px; font-weight: 800; }.feedback-modal h2 { margin: 7px 36px 18px 0; font-size: 21px; }.feedback-modal-close { position: absolute; top: 14px; right: 14px; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 9px; background: #f3f4f6; }
+.feedback-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }.feedback-quick-actions button { min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--line); border-radius: 11px; background: #fff; font-size: 12px; font-weight: 800; }.feedback-quick-actions button.selected { color: var(--green); border-color: var(--green); background: #f7fbff; }
+.feedback-followup { display: grid; gap: 11px; margin-top: 17px; padding-top: 16px; border-top: 1px solid var(--line); }.feedback-followup > p { margin: 0; font-size: 12px; font-weight: 800; }.feedback-followup > div { display: flex; flex-wrap: wrap; gap: 6px; }.feedback-followup > div button { min-height: 36px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--muted); font-size: 10px; }.feedback-followup > div button.selected { color: var(--green); border-color: var(--green); background: #f7fbff; }.feedback-followup label { gap: 7px; font-size: 11px; }.feedback-followup label small { color: var(--muted); font-weight: 500; }.feedback-followup textarea { min-height: 76px; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px; resize: vertical; }.feedback-detail-submit { min-height: 43px; border-radius: 10px; color: #fff; background: var(--green); font-size: 11px; font-weight: 800; }.feedback-success,.feedback-error { display: flex; align-items: center; gap: 6px; margin: 13px 0 0; color: var(--green); font-size: 10px; }.feedback-error { color: #b42318; }
+
+/* Keep the existing brand, but make route information feel factual rather than generated. */
+.course-emoji { display: none; }.course-hero { grid-template-columns: 1fr auto; }.course-label { color: var(--muted); }.tag-row { gap: 0; }.tag-row span { padding: 2px 8px; border-right: 1px solid var(--line); border-radius: 0; color: var(--muted); background: transparent; }.tag-row span:first-child { padding-left: 0; }.tag-row span:last-child { border-right: 0; }
+.final-hero .eyebrow svg, .simple-hero .eyebrow svg { color: var(--green); }.single-day-label { display: flex; align-items: center; gap: 7px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid var(--line); background: #fff; }.single-day-label svg { color: var(--green); }.single-day-label b { font-size: 12px; }.single-day-label span { margin-left: auto; color: var(--muted); font-size: 10px; }
+
 @media (max-width: 430px) {
   .simple-hero { min-height: calc(100svh - 64px); padding: 24px 20px 28px; }
   .landing-brand { margin-bottom: 12px; }.landing-brand img { width: 40px; height: 40px; border-radius: 12px; }.landing-brand b { font-size: 19px; }
