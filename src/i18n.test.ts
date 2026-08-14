@@ -17,6 +17,15 @@ describe('internationalized interface copy', () => {
     expect(translateCopy('해운대 · 3개 장소', 'en')).toBe('해운대 · 3 stops')
   })
 
+  it.each([
+    ['en', 'Our Busan Day Trip'],
+    ['zh-TW', '我們的釜山一日遊'],
+    ['zh-CN', '我们的釜山一日游'],
+    ['ja', 'みんなの釜山一日旅'],
+  ] as const)('localizes the untouched sample trip name to %s', (locale, expected) => {
+    expect(translateCopy('우리들의 부산 한바퀴', locale)).toBe(expected)
+  })
+
   it.each(['en', 'zh-TW', 'zh-CN', 'ja'] as const)('fully translates late-screen interface copy to %s', (locale) => {
     const phrases = [
       '작성 중인 내용을 지우고 처음부터 다시 시작할까요?',

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import React, { createContext, useContext, useLayoutEffect, useMemo, useState } from 'react'
 import { Languages } from 'lucide-react'
 import { apiUrl } from './runtime'
 
@@ -45,6 +45,7 @@ type LocalizedCopy = [en: string, traditionalChinese: string, simplifiedChinese:
 // 화면 전환 뒤에 나타나는 문구와 오류 문구까지 한곳에서 보완합니다. 장소의 공식 상호명은
 // 검색 결과와 지도에서 대조할 수 있도록 원문을 유지하고, 서비스 UI 문구만 번역합니다.
 const supplemental: Record<string, LocalizedCopy> = {
+  '우리들의 부산 한바퀴': ['Our Busan Day Trip', '我們的釜山一日遊', '我们的釜山一日游', 'みんなの釜山一日旅'],
   '에서 이동이 짧은 실제 장소를 우선했어요.': [' prioritizes real places with shorter travel.', '優先選擇移動距離較短的實際地點。', '优先选择移动距离较短的实际地点。', 'から移動の短い実在スポットを優先しました。'],
   '에서': [' from ', '從', '从', 'から'],
   '까지 가까운 실제 장소를 우선했어요.': [' prioritizes real places close to the destination.', '優先選擇靠近目的地的實際地點。', '优先选择靠近目的地的实际地点。', 'までの近い実在スポットを優先しました。'],
@@ -356,13 +357,17 @@ function translateTree(root: ParentNode, locale: Locale) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   let node: Text | null
   while ((node = walker.nextNode() as Text | null)) {
-    if (node.parentElement?.closest('script,style')) continue
+    const parent = node.parentElement
+    const protectedValue = parent?.matches('.member-info b') && node === parent.firstChild
+    const protectedBlock = parent?.closest('.trip-summary h2,.final-hero h2,.create-review article b,.saved-trip-summary b,.native-room-list b,.saved-trip-detail li b,.stop-title-row b,.mini-timeline b,.course-place-preview p,.map-stop span,.route-editor-results b,.route-editor-results span,[data-no-translate]')
+    if (parent?.closest('script,style') || protectedValue || protectedBlock) continue
     if (!originalText.has(node)) originalText.set(node, node.nodeValue ?? '')
     const source = originalText.get(node) ?? ''
     const next = translateCopy(source, locale)
     if (node.nodeValue !== next) node.nodeValue = next
   }
   root.querySelectorAll?.('[placeholder],[aria-label],[title]').forEach((element) => {
+    if (element.closest('[data-no-translate]')) return
     let originals = originalAttributes.get(element)
     if (!originals) { originals = new Map(); originalAttributes.set(element, originals) }
     for (const attribute of ['placeholder', 'aria-label', 'title']) {
@@ -379,13 +384,23 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     return (localStorage.getItem(LANGUAGE_KEY) as Locale | null) ?? detectLocale()
   })
   const setLocale = (value: Locale) => { localStorage.setItem(LANGUAGE_KEY, value); setLocaleState(value) }
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.lang = locale
     translateTree(document.body, locale)
     const observer = new MutationObserver((mutations) => mutations.forEach((mutation) => {
+      if (mutation.type === 'characterData') {
+        const node = mutation.target as Text
+        const parent = node.parentElement
+        const protectedValue = parent?.matches('.member-info b') && node === parent.firstChild
+        const protectedBlock = parent?.closest('.trip-summary h2,.final-hero h2,.create-review article b,.saved-trip-summary b,.native-room-list b,.saved-trip-detail li b,.stop-title-row b,.mini-timeline b,.course-place-preview p,.map-stop span,.route-editor-results b,.route-editor-results span,[data-no-translate]')
+        if (protectedValue || protectedBlock) return
+        if (/[가-힣]/.test(node.nodeValue ?? '')) originalText.set(node, node.nodeValue ?? '')
+        if (node.parentElement) translateTree(node.parentElement, locale)
+        return
+      }
       mutation.addedNodes.forEach((node) => { if (node.nodeType === Node.ELEMENT_NODE) translateTree(node as Element, locale); else if (node.nodeType === Node.TEXT_NODE && node.parentElement) translateTree(node.parentElement, locale) })
     }))
-    observer.observe(document.body, { childList: true, subtree: true })
+    observer.observe(document.body, { childList: true, characterData: true, subtree: true })
     const sessionKey = `mohang-usage:${locale}:${location.pathname.startsWith('/demo') ? 'demo' : location.pathname.startsWith('/app') ? 'service' : 'landing'}`
     if (sessionStorage.getItem(sessionKey) !== '1') {
       sessionStorage.setItem(sessionKey, '1')

@@ -646,13 +646,21 @@ function HomeScreen() {
 }
 
 function CreateTrip({ state, setState, stage, setStage, appMode = false, nativeMode = false, basePath = '/demo' }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>>; stage: number; setStage: React.Dispatch<React.SetStateAction<number>>; appMode?: boolean; nativeMode?: boolean; basePath?: string }) {
+  const { locale, t } = useI18n()
   const setTrip = (field: string, value: string) => setState((s) => ({ ...s, trip: { ...s.trip, [field]: value } }))
-  const [hostName, setHostName] = useState('민지')
+  const [hostName, setHostName] = useState(() => t('민지'))
+  const hostNameEdited = useRef(false)
+  const tripNameEdited = useRef(false)
   const [expectedMembers, setExpectedMembers] = useState(4)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [originSelected, setOriginSelected] = useState(false)
   const [destinationSelected, setDestinationSelected] = useState(false)
+  useEffect(() => {
+    if (!hostNameEdited.current) setHostName(t('민지'))
+    const sampleTripNames = ['우리들의 부산 한바퀴', 'Our Busan Day Trip', '我們的釜山一日遊', '我们的釜山一日游', 'みんなの釜山一日旅']
+    if (!tripNameEdited.current && sampleTripNames.includes(state.trip.name)) setTrip('name', t('우리들의 부산 한바퀴'))
+  }, [locale])
   const openAreas = ['상관없음', '서면·전포', '광안리·수영', '해운대·청사포', '남포·광복']
   const openRoute = state.trip.routeMode === 'open'
   const maxTravelPlanDays = 365
@@ -733,9 +741,9 @@ function CreateTrip({ state, setState, stage, setStage, appMode = false, nativeM
       {stage === 3 && <>
         <div className="section-heading"><h2>여행방 정보를 알려주세요</h2><p>친구들이 알아보기 쉬운 이름과 여행 날짜를 정해 주세요.</p></div>
         <div className="form-card">
-          <label>여행방 이름<input value={state.trip.name} onChange={(event) => setTrip('name', event.target.value)} placeholder="예: 우리들의 부산 여행" /></label>
+          <label>여행방 이름<input value={state.trip.name} onChange={(event) => { tripNameEdited.current = true; setTrip('name', event.target.value) }} placeholder="예: 우리들의 부산 여행" /></label>
           <label className="travel-date-label">여행 날짜<input className="travel-date-input" type="date" min={today} max={maxTravelDate} value={state.trip.startDate} onChange={(event) => { setTrip('startDate', event.target.value); setTrip('endDate', event.target.value) }} /><span className="travel-date-limit"><CalendarDays size={14} /> 최대 계획 가능 날짜 <b>{maxTravelDateLabel}</b></span><small className="travel-date-note">오늘부터 365일 뒤까지 계획할 수 있어요. 여행방은 생성 후 7일 뒤 삭제되므로 확정 경로는 마이페이지에 저장해 주세요. 단기예보가 없는 날짜는 날씨를 추천 기준에서 제외해요.</small></label>
-          <label>내 별명<input maxLength={20} value={hostName} onChange={(event) => setHostName(event.target.value)} placeholder="예: 민지" /></label>
+          <label>내 별명<input maxLength={20} value={hostName} onChange={(event) => { hostNameEdited.current = true; setHostName(event.target.value) }} placeholder="예: 민지" /></label>
           <label>함께 갈 인원
             <div className="segmented member-count">{[1, 2, 3, 4, 5, 6].map((count) => <button type="button" className={expectedMembers === count ? 'active' : ''} onClick={() => setExpectedMembers(count)} key={count}>{count}명</button>)}</div>
           </label>
@@ -885,14 +893,15 @@ function Room({ state, setState }: { state: AppState; setState: React.Dispatch<R
 }
 
 function Preferences({ state, setState }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
+  const { t } = useI18n()
   const member = state.members.find((m) => m.id === state.activeMemberId)!
   const [form, setForm] = useState<Preference>(normalizePreference(member.preference) ?? { themes: [], placeCount: 4, food: [], mood: [] })
   const toggle = (theme: string) => setForm((f) => ({ ...f, themes: toggleSelection(f.themes, theme) }))
   const save = () => setState((s) => ({ ...s, step: 'room', members: s.members.map((m) => m.id === member.id ? { ...m, preference: form } : m) }))
   return (
     <section className="page">
-      <Progress current={2} total={4} label={`${member.name}님의 취향`} />
-      <div className="profile-heading"><Avatar member={member} /><div><h2>{member.name}님은 어떤 여행이 좋아요?</h2><p>마음에 드는 항목을 여러 개 골라주세요.</p></div></div>
+      <Progress current={2} total={4} label={<><span data-no-translate>{member.name}</span>{t('님의 취향')}</>} />
+      <div className="profile-heading"><Avatar member={member} /><div><h2><span data-no-translate>{member.name}</span>{t('님은 어떤 여행이 좋아요?')}</h2><p>마음에 드는 항목을 여러 개 골라주세요.</p></div></div>
       <PreferenceGroup title="가장 가고 싶은 장소" options={themes} selected={form.themes} onSelect={toggle} icons />
       <PlaceCountControl openRoute={state.trip.routeMode === 'open'} value={form.placeCount} onChange={(placeCount) => setForm((current) => ({ ...current, placeCount }))} />
       <PreferenceGroup title="좋아하는 음식 · 복수 선택" options={foods} selected={form.food} onSelect={(value) => setForm((f) => ({ ...f, food: toggleSelection(f.food, value) }))} />
@@ -1218,7 +1227,7 @@ function OfficialRestaurantBadge() {
   return <span className="official-restaurant-badge"><ShieldCheck size={12} /> 부산시 모범음식점</span>
 }
 
-function Progress({ current, total, label }: { current: number; total: number; label: string }) {
+function Progress({ current, total, label }: { current: number; total: number; label: React.ReactNode }) {
   return <div className="step-progress"><span>{label}</span><div>{Array.from({ length: total }, (_, i) => <i key={i} className={i < current ? 'active' : ''} />)}</div><small>{current}/{total}</small></div>
 }
 
