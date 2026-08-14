@@ -70,7 +70,7 @@ describe('internationalized interface copy', () => {
       if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) && /[가-힣]/.test(node.text)) values.add(node.text.trim())
       ts.forEachChild(node, visit)
     }
-    for (const file of ['src/main.tsx', 'src/landing.tsx', 'src/error-boundary.tsx']) {
+    for (const file of ['src/main.tsx', 'src/landing.tsx', 'src/error-boundary.tsx', 'src/date-picker.tsx']) {
       visit(ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX))
     }
     for (const locale of ['en', 'zh-TW', 'zh-CN', 'ja'] as const) {

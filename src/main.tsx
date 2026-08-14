@@ -18,6 +18,7 @@ import type { RecentRoom, SavedTrip } from './mobile'
 import { apiUrl } from './runtime'
 import { track } from './analytics'
 import { AppErrorBoundary } from './error-boundary'
+import { DatePicker } from './date-picker'
 import { naverRouteUrl, sourceDisplay, transitLeg, transitLegs } from './route-display'
 import { LanguageSelect, LocaleProvider, translatePresetName, useI18n } from './i18n'
 import './styles.css'
@@ -700,7 +701,7 @@ function CreateTrip({ state, setState, stage, setStage, appMode = false, nativeM
         <div className="section-heading"><h2>여행방 정보를 알려주세요</h2><p>친구들이 알아보기 쉬운 이름과 여행 날짜를 정해 주세요.</p></div>
         <div className="form-card">
           <label>여행방 이름<input value={state.trip.name} onChange={(event) => { tripNameEdited.current = true; setTrip('name', event.target.value) }} placeholder="예: 우리들의 부산 여행" /></label>
-          <label className="travel-date-label">여행 날짜<span className="travel-date-control"><CalendarDays className="control-leading-icon" size={17} aria-hidden="true" /><input className="travel-date-input" type="date" min={today} max={maxTravelDate} value={state.trip.startDate} onChange={(event) => { setTrip('startDate', event.target.value); setTrip('endDate', event.target.value) }} /></span><span className="travel-date-limit"><CalendarDays size={14} /> 최대 계획 가능 날짜 <b data-no-translate>{maxTravelDateLabel}</b></span><small className="travel-date-note">오늘부터 365일 뒤까지 계획할 수 있어요. 여행방은 생성 후 7일 뒤 삭제되므로 확정 경로는 마이페이지에 저장해 주세요. 단기예보가 없는 날짜는 날씨를 추천 기준에서 제외해요.</small></label>
+          <div className="travel-date-label form-field"><span className="form-field-label">여행 날짜</span><DatePicker min={today} max={maxTravelDate} value={state.trip.startDate} onChange={(value) => { setTrip('startDate', value); setTrip('endDate', value) }} /><span className="travel-date-limit"><CalendarDays size={14} /> 최대 계획 가능 날짜 <b data-no-translate>{maxTravelDateLabel}</b></span><small className="travel-date-note">오늘부터 365일 뒤까지 계획할 수 있어요. 여행방은 생성 후 7일 뒤 삭제되므로 확정 경로는 마이페이지에 저장해 주세요. 단기예보가 없는 날짜는 날씨를 추천 기준에서 제외해요.</small></div>
           <label>내 별명<input maxLength={20} value={hostName} onChange={(event) => { hostNameEdited.current = true; setHostName(event.target.value) }} placeholder="예: 민지" /></label>
           <label>함께 갈 인원
             <div className="segmented member-count">{[1, 2, 3, 4, 5, 6].map((count) => <button type="button" className={expectedMembers === count ? 'active' : ''} onClick={() => setExpectedMembers(count)} key={count}>{count}명</button>)}</div>

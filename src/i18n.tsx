@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Languages } from 'lucide-react'
 import { apiUrl } from './runtime'
 
@@ -515,5 +515,14 @@ export const useI18n = () => useContext(I18nContext)
 
 export function LanguageSelect({ compact = false }: { compact?: boolean }) {
   const { locale, setLocale } = useI18n()
-  return <label className={`language-select ${compact ? 'compact' : ''}`}><Languages className="control-leading-icon" size={16} aria-hidden="true" /><span className="sr-only">Language</span><select value={locale} onChange={(event) => setLocale(event.target.value as Locale)} aria-label="언어 선택">{(Object.keys(labels) as Locale[]).map((value) => <option key={value} value={value}>{labels[value]}</option>)}</select><ChevronDown className="control-chevron" size={15} aria-hidden="true" /></label>
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false) }
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
+    document.addEventListener('pointerdown', close); document.addEventListener('keydown', escape)
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape) }
+  }, [open])
+  return <div ref={root} className={`language-select ${compact ? 'compact' : ''}`}><button type="button" aria-haspopup="listbox" aria-expanded={open} aria-label="언어 선택" onClick={() => setOpen((current) => !current)}><Languages className="control-leading-icon" size={16} aria-hidden="true" /><span>{labels[locale]}</span><ChevronDown className="control-chevron" size={15} aria-hidden="true" /></button>{open && <div className="language-menu" role="listbox" aria-label="언어 선택">{(Object.keys(labels) as Locale[]).map((value) => <button type="button" role="option" aria-selected={locale === value} className={locale === value ? 'selected' : ''} key={value} onClick={() => { setLocale(value); setOpen(false) }}>{labels[value]}{locale === value && <span aria-hidden="true">✓</span>}</button>)}</div>}</div>
 }
