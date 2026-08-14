@@ -1,7 +1,7 @@
 'use client'
 
-import { App } from '../src/main'
+import { LandingApp } from '../src/landing'
 
 export default function LandingPage() {
-  return <App mode="landing" />
+  return <LandingApp />
 }

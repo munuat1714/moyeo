@@ -21,6 +21,7 @@ body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, input, select, textarea { font: inherit; }
 button { border: 0; cursor: pointer; color: inherit; }
 button:disabled { cursor: not-allowed; opacity: .48; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 3px solid rgba(49,130,246,.38); outline-offset: 2px; }
 
 .app-shell {
   width: min(100%, 430px);
@@ -30,6 +31,8 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   box-shadow: 0 0 80px rgba(23, 31, 25, .12);
   position: relative;
 }
+.fatal-error { min-height: 100vh; padding: 48px 24px; display: grid; align-content: center; gap: 14px; text-align: center; }
+.fatal-error h1, .fatal-error p { margin: 0; }.fatal-error p { color: var(--muted); line-height: 1.6; }.fatal-error .primary-button { margin-top: 8px; }
 .app-header {
   height: 64px; display: flex; align-items: center; justify-content: space-between;
   padding: 10px 18px; position: sticky; top: 0; z-index: 20;
@@ -85,7 +88,7 @@ input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,79,.
 .field-row.route-fields { grid-template-columns: 1fr; align-items: stretch; gap: 7px; }.route-fields .field-arrow { margin: 0 auto; transform: rotate(90deg); }
 .route-input-heading { margin-bottom: -10px; display: flex; align-items: center; justify-content: space-between; color: #525a51; font-size: 13px; }
 .route-input-heading button { padding: 5px 7px; color: var(--green); border-radius: 7px; background: var(--green-soft); font-size: 10px; font-weight: 800; }
-.route-data-note { margin-top: -10px; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.route-data-note { margin-top: -10px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .route-mode-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }.route-mode-options > button { min-height: 72px; padding: 11px; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 13px; background: white; color: var(--muted); text-align: left; }.route-mode-options > button.active { border-color: var(--green); background: var(--green-soft); color: var(--green); }.route-mode-options span { display: grid; gap: 3px; }.route-mode-options b { font-size: 10px; }.route-mode-options small { font-size: 8px; line-height: 1.35; }.area-chips { display: flex; flex-wrap: wrap; gap: 7px; }.area-chips button { min-height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: white; font-size: 10px; }.area-chips button.active { border-color: var(--green); background: var(--green-soft); color: var(--green); font-weight: 800; }.open-route-note { margin-top: 10px; padding: 10px; display: flex; align-items: center; gap: 7px; border-radius: 10px; background: #f6f8f5; color: var(--muted); font-size: 9px; line-height: 1.45; }
 .transport-summary { padding: 13px; display: flex; align-items: center; gap: 10px; border-radius: 12px; color: var(--green); background: var(--green-soft); }.transport-summary > span { display: grid; gap: 3px; }.transport-summary b { font-size: 12px; }.transport-summary small { color: var(--muted); font-size: 10px; line-height: 1.4; }
 .create-wizard .section-heading { min-height: 76px; }.route-mode-cards { margin-top: 28px; grid-template-columns: 1fr; }.route-mode-cards > button { min-height: 116px; padding: 20px; gap: 14px; border-radius: 18px; }.route-mode-cards b { font-size: 15px; }.route-mode-cards small { font-size: 11px; line-height: 1.5; }.area-grid { display: grid; grid-template-columns: 1fr 1fr; }.area-grid button { width: 100%; min-height: 48px; border-radius: 13px; }

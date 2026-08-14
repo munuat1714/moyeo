@@ -16,23 +16,14 @@ import type { AppState, Course, Preference, Stop } from './types'
 import { deleteSavedTrip, forgetRoom, hasSavedTrip, isNativeApp, notificationsEnabled, recentRooms, rememberRoom, savedTrips, saveTrip, scheduleTripNotifications, setNotificationsEnabled, shareInvite } from './mobile'
 import type { RecentRoom, SavedTrip } from './mobile'
 import { apiUrl } from './runtime'
+import { track } from './analytics'
+import { AppErrorBoundary } from './error-boundary'
 import { naverRouteUrl, sourceDisplay, transitLeg, transitLegs } from './route-display'
 import { LanguageSelect, LocaleProvider, translatePresetName, useI18n } from './i18n'
-import 'pretendard/dist/web/variable/pretendardvariable.css'
-import '@fontsource-variable/noto-sans/wght.css'
-import '@fontsource-variable/noto-sans-jp/wght.css'
-import '@fontsource-variable/noto-sans-sc/wght.css'
-import '@fontsource-variable/noto-sans-tc/wght.css'
 import './styles.css'
 
 const SERVICE_STORAGE_KEY = 'moyeo-service-state-v1'
 const DEMO_STORAGE_KEY = 'moyeo-demo-state-v1'
-const EVENT_KEY = 'modu-trip-anonymous-events-v1'
-const ATTRIBUTION_KEY = 'modu-trip-attribution-v1'
-const SESSION_EVENT_PREFIX = 'modu-trip-session-event:'
-
-type AnonymousEvent = { name: string; at: string }
-
 const toggleSelection = (selected: string[], value: string) => selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]
 const asSelection = (value: string[] | string | undefined) => Array.isArray(value) ? value : value ? [value] : []
 const normalizePreference = (preference: Preference | undefined): Preference | undefined => preference ? {
@@ -40,28 +31,6 @@ const normalizePreference = (preference: Preference | undefined): Preference | u
   food: asSelection(preference.food),
   mood: asSelection(preference.mood),
 } : undefined
-
-function track(name: string) {
-  try {
-    const events = JSON.parse(localStorage.getItem(EVENT_KEY) ?? '[]') as AnonymousEvent[]
-    localStorage.setItem(EVENT_KEY, JSON.stringify([...events.slice(-49), { name, at: new Date().toISOString() }]))
-    const query = new URLSearchParams(window.location.search)
-    const incoming = {
-      source: query.get('utm_source') ?? '', medium: query.get('utm_medium') ?? '', campaign: query.get('utm_campaign') ?? '',
-    }
-    if (incoming.source || incoming.medium || incoming.campaign) sessionStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(incoming))
-    const attribution = JSON.parse(sessionStorage.getItem(ATTRIBUTION_KEY) ?? '{}') as typeof incoming
-    const sessionKey = `${SESSION_EVENT_PREFIX}${name}`
-    const firstInSession = sessionStorage.getItem(sessionKey) !== '1'
-    if (firstInSession) sessionStorage.setItem(sessionKey, '1')
-    void fetch(apiUrl('/api/events'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
-      body: JSON.stringify({ name, ...attribution, firstInSession }),
-    }).catch(() => undefined)
-  } catch {
-    // 체험은 분석 기록에 실패해도 계속 진행됩니다.
-  }
-}
 
 function loadState(storageKey = SERVICE_STORAGE_KEY): AppState {
   try {
@@ -79,11 +48,11 @@ function loadState(storageKey = SERVICE_STORAGE_KEY): AppState {
   }
 }
 
-export function App({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service' }) {
-  return <LocaleProvider><AppContent mode={mode} /></LocaleProvider>
+export function App({ mode }: { mode: 'demo' | 'service' }) {
+  return <LocaleProvider><AppErrorBoundary><AppContent mode={mode} /></AppErrorBoundary></LocaleProvider>
 }
 
-function AppContent({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service' }) {
+function AppContent({ mode }: { mode: 'demo' | 'service' }) {
   const [liveRoomId] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('room') ?? '')
   const [nativeMode] = useState(() => typeof window !== 'undefined' && isNativeApp())
   const appMode = mode === 'service' || nativeMode
@@ -102,7 +71,7 @@ function AppContent({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service
   const recommendedCourses = useMemo(() => recommendCourses(courses, state.members), [state.members])
   const selectedCourse = recommendedCourses.find((course) => course.id === selectedCourseId) ?? recommendedCourses[0]
 
-  useEffect(() => localStorage.setItem(storageKey, JSON.stringify(state)), [state, storageKey])
+  useEffect(() => { try { localStorage.setItem(storageKey, JSON.stringify(state)) } catch { /* Device storage is optional. */ } }, [state, storageKey])
   useEffect(() => { track(appMode ? 'app_view' : isDemo ? 'demo_view' : 'landing_view') }, [isDemo, appMode])
   useEffect(() => {
     if (!nativeMode) return
@@ -183,9 +152,7 @@ function AppContent({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service
       </header>
 
       <main>
-        {state.step === 'home' && (appMode
-          ? <MobileHomeScreen tab={appTab} nativeMode={nativeMode} onCreate={() => { setCreateStage(1); update({ step: 'create' }) }} />
-          : <HomeScreen />)}
+        {state.step === 'home' && <MobileHomeScreen tab={appTab} nativeMode={nativeMode} onCreate={() => { setCreateStage(1); update({ step: 'create' }) }} />}
         {state.step === 'create' && <CreateTrip state={state} setState={setState} stage={createStage} setStage={setCreateStage} appMode={appMode} nativeMode={nativeMode} basePath={basePath} />}
         {state.step === 'room' && <Room state={state} setState={setState} />}
         {state.step === 'preferences' && <Preferences state={state} setState={setState} />}
@@ -206,6 +173,8 @@ function AppContent({ mode = 'landing' }: { mode?: 'landing' | 'demo' | 'service
 
 function QuickFeedback({ screen }: { screen: AppState['step'] }) {
   const { locale, t } = useI18n()
+  const launcherRef = useRef<HTMLButtonElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const [sentiment, setSentiment] = useState<'up' | 'down' | null>(null)
   const [reason, setReason] = useState('')
@@ -227,14 +196,21 @@ function QuickFeedback({ screen }: { screen: AppState['step'] }) {
       setStatus('sent')
     } catch { setStatus('error') }
   }
-  const close = () => { setOpen(false); setSentiment(null); setReason(''); setComment(''); setStatus('idle'); setSubmissionKey('') }
+  const close = () => { setOpen(false); setSentiment(null); setReason(''); setComment(''); setStatus('idle'); setSubmissionKey(''); requestAnimationFrame(() => launcherRef.current?.focus()) }
+  useEffect(() => {
+    if (!open) return
+    closeRef.current?.focus()
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
+    document.addEventListener('keydown', escape)
+    return () => document.removeEventListener('keydown', escape)
+  }, [open])
   const reasonOptions = sentiment === 'up'
     ? [['taste', '취향에 맞아요'], ['route', '동선이 좋아요'], ['places', '장소가 좋아요']]
     : [['distance', '거리가 멀어요'], ['taste', '취향과 달라요'], ['wrong_place', '장소 정보가 틀려요'], ['route', '이동이 불편해요'], ['other', '기타']]
   return <>
-    <div className="feedback-dock"><button className="feedback-launcher" aria-label={t('의견 보내기')} onClick={() => setOpen(true)}><MessageCircle size={18} /><span>{t('의견 보내기')}</span></button></div>
+    <div className="feedback-dock"><button ref={launcherRef} className="feedback-launcher" aria-label={t('의견 보내기')} onClick={() => setOpen(true)}><MessageCircle size={18} /><span>{t('의견 보내기')}</span></button></div>
     {open && <div className="feedback-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close() }}><section className="feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
-      <button className="feedback-modal-close" aria-label={t('닫기')} onClick={close}><X size={19} /></button>
+      <button ref={closeRef} className="feedback-modal-close" aria-label={t('닫기')} onClick={close}><X size={19} /></button>
       <small>MOHANG FEEDBACK</small><h2 id="feedback-title">{t('이 화면은 어떠셨나요?')}</h2>
       <div className="feedback-quick-actions"><button className={sentiment === 'up' ? 'selected' : ''} onClick={() => void send('up')}><ThumbsUp size={18} /> {t('도움 됐어요')}</button><button className={sentiment === 'down' ? 'selected' : ''} onClick={() => void send('down')}><ThumbsDown size={18} /> {t('아쉬워요')}</button></div>
       {sentiment && <div className="feedback-followup"><p>{t(sentiment === 'up' ? '어떤 점이 좋았나요?' : '어떤 점이 아쉬웠나요?')}</p><div>{reasonOptions.map(([value, label]) => <button key={value} className={reason === value ? 'selected' : ''} onClick={() => { setReason(value); void send(sentiment, value, comment) }}>{t(label)}</button>)}</div><label><span>{t('더 알려주실 내용이 있나요?')} <small>{t('선택')}</small></span><textarea maxLength={300} value={comment} onChange={(event) => setComment(event.target.value)} placeholder={t('개인정보는 적지 말아 주세요.')} /></label><button className="feedback-detail-submit" disabled={!comment.trim() || status === 'sending'} onClick={() => void send(sentiment, reason, comment)}>{t('익명으로 의견 보내기')}</button></div>}
@@ -594,7 +570,7 @@ function MobileHomeScreen({ tab, nativeMode, onCreate }: { tab: 'home' | 'my' | 
   </section>
 
   if (tab === 'my') return <section className="native-home-page my-page">
-    <div className="native-page-heading"><span>MY PAGE</span><h1>마이페이지</h1><p>저장한 확정 경로와 진행 중인 여행방을 이 기기에서 확인해요.</p></div>
+    <div className="native-page-heading"><span>MY PAGE</span><h1>마이페이지</h1><p>저장한 확정 경로와 진행 중인 여행방을 이 기기에서 확인해요. 앱을 삭제하거나 브라우저 데이터를 지우면 저장 일정도 삭제될 수 있어요.</p></div>
     <div className="my-section-heading"><b>저장한 여행</b><span>{saved.length}개</span></div>
     <SavedTripList trips={saved} onDelete={async (id) => { await deleteSavedTrip(id); setSaved(await savedTrips()) }} />
     <div className="my-section-heading"><b>진행 중인 여행방</b><span>{rooms.length}개</span></div>
@@ -625,35 +601,6 @@ function RecentRoomList({ rooms, loading, onOpen, compact = false }: { rooms: Re
   if (loading) return <div className="native-room-empty"><Clock3 size={20} /><span>여행방을 확인하고 있어요.</span></div>
   if (!rooms.length) return <div className="native-room-empty"><Map size={22} /><b>아직 저장된 여행이 없어요</b><span>여행방을 만들거나 초대 코드로 참여해 보세요.</span></div>
   return <div className={`native-room-list ${compact ? 'compact' : ''}`}>{rooms.map((room) => { const deletionDate = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Seoul' }).format(new Date(room.expiresAt * 1000)); return <button key={room.id} onClick={() => onOpen(room.id)}><span className="native-room-date"><CalendarDays size={15} />{room.startDate.slice(5).replace('-', '.')}</span><span><b>{room.name}</b><small><span>{t('방 코드')}</span> {room.id} · <span data-no-translate>{deletionDate}</span> <span>{t('삭제')}</span></small></span><ChevronRight size={19} /></button> })}</div>
-}
-
-function HomeScreen() {
-  return (
-    <div className="simple-landing">
-      <section className="simple-hero">
-        <div className="landing-brand" aria-label="모행">
-          <img src="/social/moyeo-profile.png" alt="" />
-          <span><b>모행</b><small>MOHANG</small></span>
-        </div>
-        <span className="eyebrow"><MapPin size={14} /> 친구 취향으로 완성하는 여행</span>
-        <h1>여행 계획,<br /><em>모두의 취향</em>에서 시작해요.</h1>
-        <p>친구들의 취향을 모아 가까운 부산 코스를 추천하고, 투표로 함께 결정하는 당일치기 여행 서비스예요.</p>
-        <div className="concept-flow" aria-label="모행 이용 개요">
-          <article><span><UsersRound size={20} /></span><div><b>취향 선택</b><small>각자 원하는 여행을 골라요</small></div></article>
-          <i><ArrowRight size={17} /></i>
-          <article><span><Map size={20} /></span><div><b>코스 추천</b><small>가까운 실제 장소를 모아요</small></div></article>
-          <i><ArrowRight size={17} /></i>
-          <article><span><Vote size={20} /></span><div><b>함께 결정</b><small>투표로 최종 경로를 정해요</small></div></article>
-        </div>
-        <div className="landing-entry-actions">
-          <a className="hero-demo-link" href="/app" onClick={() => track('landing_app_click')}>웹에서 모행 써보기 <ArrowRight size={18} /></a>
-          <p className="web-launch-note">Play Store 심사 중 · Android와 iPhone에서 설치 없이 이용할 수 있어요</p>
-        </div>
-      </section>
-
-      <footer className="simple-footer"><div><img className="footer-brand-logo" src="/social/moyeo-profile.png" alt="" /><b>모행</b></div><p>친구들의 취향을 모아 완성하는 여행 계획 서비스</p><small>© 2026 모행 팀</small></footer>
-    </div>
-  )
 }
 
 function CreateTrip({ state, setState, stage, setStage, appMode = false, nativeMode = false, basePath = '/demo' }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>>; stage: number; setStage: React.Dispatch<React.SetStateAction<number>>; appMode?: boolean; nativeMode?: boolean; basePath?: string }) {
@@ -1183,8 +1130,12 @@ function RouteMap({ stops }: { stops: Stop[] }) {
 }
 
 function TransitLegCard({ leg }: { leg: NonNullable<ReturnType<typeof transitLeg>> }) {
-  const Icon = leg.mode === '도보' ? Footprints : leg.mode === '버스·도보' ? BusFront : TrainFront
-  return <div className="transit-leg" aria-label={`${leg.from.title}에서 ${leg.to.title} 이동 안내`}><Icon size={15} /><span><b>{leg.mode}</b><small>약 {leg.distanceKm.toFixed(1)}km · {leg.minutes}분 예상</small></span><a href={naverRouteUrl(leg)} target="_blank" rel="noreferrer"><ExternalLink size={12} /> 실제 길찾기</a></div>
+  const { t } = useI18n()
+  const Icon = leg.mode === 'walk' ? Footprints : leg.mode === 'public-near' ? BusFront : TrainFront
+  const modeLabel = leg.mode === 'walk' ? t('예상 도보') : t('예상 대중교통')
+  const minMinutes = Math.max(1, Math.round(leg.minutes * .8))
+  const maxMinutes = Math.max(minMinutes + 1, Math.round(leg.minutes * 1.25))
+  return <div className="transit-leg" aria-label={`${leg.from.title}에서 ${leg.to.title} 이동 안내`}><Icon size={15} /><span><b>{modeLabel}</b><small>{t('직선거리 기준')} {leg.distanceKm.toFixed(1)}km · {minMinutes}~{maxMinutes}{t('분 예상')}</small></span><a href={naverRouteUrl(leg)} target="_blank" rel="noreferrer"><ExternalLink size={12} /> {t('네이버지도에서 확인')}</a></div>
 }
 
 type RoadRoute = { path: number[][]; distanceMeters: number; durationMinutes: number }

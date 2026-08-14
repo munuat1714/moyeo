@@ -10,7 +10,7 @@ import type { ImageConfig } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import { deleteExpiredRooms, handleRoomApi } from "./rooms";
 import { cachedPlaceSearch, selectBestPlaceMatch } from "./recommendations";
-import { publicDataStatus, syncPublicData } from "./public-data";
+import { evaluatePublicDataHealth, publicDataStatus, syncPublicData } from "./public-data";
 import { handleAnalyticsDashboard } from "./analytics-dashboard";
 import { consumeRateLimit } from "./operations";
 
@@ -56,6 +56,13 @@ async function rateLimitResponse(db: D1Database, scope: string, limit: number, w
   });
 }
 
+async function anonymousRequestScope(request: Request) {
+  const address = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+  const day = new Date().toISOString().slice(0, 10)
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${day}:${address}`))
+  return [...new Uint8Array(digest)].slice(0, 8).map((value) => value.toString(16).padStart(2, '0')).join('')
+}
+
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
 // To route SVGs through the optimizer (with security headers), set
@@ -70,7 +77,7 @@ export default {
     if (analyticsResponse) return analyticsResponse;
 
     if (url.pathname === "/api/events" && request.method === "POST") {
-      const limited = await rateLimitResponse(env.DB, 'events:global', 5000, 3600);
+      const limited = await rateLimitResponse(env.DB, 'events:global', 50000, 3600);
       if (limited) return secured(limited);
       const allowed = new Set([
         "landing_view", "app_view", "demo_view", "landing_interest_yes", "landing_interest_not_yet", "landing_app_click", "landing_demo_click",
@@ -97,7 +104,7 @@ export default {
     }
 
     if (url.pathname === "/api/usage" && request.method === "POST") {
-      const limited = await rateLimitResponse(env.DB, 'usage:global', 5000, 3600);
+      const limited = await rateLimitResponse(env.DB, 'usage:global', 50000, 3600);
       if (limited) return secured(limited);
       try {
         const body = await request.json<{ locale?: string; surface?: string }>();
@@ -120,7 +127,7 @@ export default {
     }
 
     if (url.pathname === "/api/feedback" && request.method === "POST") {
-      const limited = await rateLimitResponse(env.DB, 'feedback:global', 2000, 3600);
+      const limited = await rateLimitResponse(env.DB, 'feedback:global', 10000, 3600);
       if (limited) return secured(limited);
       try {
         const body = await request.json<{ sentiment?: string; reason?: string; comment?: string; surface?: string; clientKind?: string; submissionKey?: string; screen?: string; locale?: string }>();
@@ -154,7 +161,10 @@ export default {
 
     if (url.pathname.startsWith('/api/rooms')) {
       if (url.pathname === '/api/rooms' && request.method === 'POST') {
-        const limited = await rateLimitResponse(env.DB, 'rooms:create:global', 1000, 3600);
+        const client = await anonymousRequestScope(request);
+        const clientLimited = await rateLimitResponse(env.DB, `rooms:create:${client}`, 20, 3600);
+        if (clientLimited) return secured(clientLimited);
+        const limited = await rateLimitResponse(env.DB, 'rooms:create:global', 10000, 3600);
         if (limited) return secured(limited);
       }
       const joinMatch = request.method === 'POST' && url.pathname.match(/^\/api\/rooms\/([a-z0-9]+)\/members$/);
@@ -195,7 +205,7 @@ export default {
           return secured(Response.json(value, { headers: { "Cache-Control": "public, max-age=86400" } }));
         } catch { /* refresh */ }
       }
-      const limited = await rateLimitResponse(env.DB, "naver-route:global", 1000, 3600);
+      const limited = await rateLimitResponse(env.DB, "naver-route:global", 5000, 3600);
       if (limited) return secured(limited);
 
       let result: { path: number[][]; distanceMeters: number; durationMinutes: number; basis: string } | null = null;
@@ -236,11 +246,8 @@ export default {
 
     if (url.pathname === "/api/health" && request.method === "GET") {
       const providers = await publicDataStatus(env.DB) as any[];
-      const unavailable = providers.filter((item) => item.status === 'failed' && Number(item.item_count) === 0).map((item) => item.provider);
-      const stale = providers.filter((item) => item.status === 'stale').map((item) => item.provider);
-      const empty = providers.filter((item) => item.status === 'empty').map((item) => item.provider);
-      const dataStatus = unavailable.length || stale.length || empty.length ? 'degraded' : 'ok';
-      return secured(Response.json({ status: 'ok', dataStatus, unavailable, stale, empty }, {
+      const health = evaluatePublicDataHealth(providers);
+      return secured(Response.json({ status: 'ok', dataStatus: health.status, ...health }, {
         status: 200, headers: { 'Cache-Control': 'no-store' },
       }));
     }
@@ -248,14 +255,9 @@ export default {
     if (url.pathname === "/api/data-health" && request.method === "GET") {
       const providers = await publicDataStatus(env.DB) as any[];
       const now = Math.floor(Date.now() / 1000);
-      const unavailable = providers.filter((item) => item.status === 'failed' && Number(item.item_count) === 0).map((item) => item.provider);
-      const stale = providers.filter((item) => item.status === 'stale').map((item) => item.provider);
-      const empty = providers.filter((item) => item.status === 'empty').map((item) => item.provider);
-      const overdue = providers.filter((item) => item.provider !== 'TOUR_DETAIL' && (!item.last_completed_at || now - Number(item.last_completed_at) > 72 * 60 * 60)).map((item) => item.provider);
-      const unavailableSet = [...new Set([...unavailable, ...overdue])];
-      const status = unavailableSet.length ? 'unavailable' : stale.length || empty.length ? 'degraded' : 'ok';
-      return secured(Response.json({ status, unavailable: unavailableSet, stale, empty, checkedAt: now }, {
-        status: unavailableSet.length ? 503 : 200, headers: { 'Cache-Control': 'no-store' },
+      const health = evaluatePublicDataHealth(providers, now);
+      return secured(Response.json({ ...health, checkedAt: now }, {
+        status: health.status === 'unavailable' ? 503 : 200, headers: { 'Cache-Control': 'no-store' },
       }));
     }
 
@@ -282,7 +284,10 @@ export default {
       if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) {
         return Response.json({ error: "네이버 지역 검색이 아직 설정되지 않았습니다." }, { status: 503 });
       }
-      const limited = await rateLimitResponse(env.DB, 'naver-local:global', 1000, 3600);
+      const client = await anonymousRequestScope(request);
+      const clientLimited = await rateLimitResponse(env.DB, `naver-local:${client}`, 120, 600);
+      if (clientLimited) return secured(clientLimited);
+      const limited = await rateLimitResponse(env.DB, 'naver-local:global', 20000, 3600);
       if (limited) return secured(limited);
       try {
         const items = await cachedPlaceSearch(query, {
@@ -333,11 +338,12 @@ export default {
     return secured(response, cacheControl);
   },
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    const providers = ['TOUR_API', 'BUSAN_FOOD', 'BUSAN_MODEL_FOOD', 'TOUR_DETAIL', 'BUSAN_EXHIBITION', 'KMA_FORECAST'];
     ctx.waitUntil(Promise.all([
       deleteExpiredRooms(env.DB),
       env.DB.prepare("DELETE FROM anonymous_event_counts WHERE event_date < date('now','+9 hours','-180 days')").run(),
       env.DB.prepare("DELETE FROM request_rate_limits WHERE expires_at < strftime('%s','now')").run(),
-      syncPublicData({ DB: env.DB, PUBLIC_DATA_SERVICE_KEY: env.PUBLIC_DATA_SERVICE_KEY }),
+      ...providers.map((provider) => syncPublicData({ DB: env.DB, PUBLIC_DATA_SERVICE_KEY: env.PUBLIC_DATA_SERVICE_KEY }, [provider])),
     ]));
   },
 };

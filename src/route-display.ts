@@ -7,7 +7,7 @@ export type TransitLeg = {
   to: Stop
   distanceKm: number
   minutes: number
-  mode: '도보' | '버스·도보' | '지하철·버스'
+  mode: 'walk' | 'public-near' | 'public-far'
   color: string
 }
 
@@ -28,9 +28,9 @@ export function transitLeg(from: Stop, to: Stop): TransitLeg | null {
   if (!validPoint(from) || !validPoint(to)) return null
   const directDistance = distanceKm(from, to)
   const distance = directDistance * 1.22
-  if (distance <= 0.9) return { from, to, distanceKm: distance, minutes: Math.max(4, Math.round(distance * 13)), mode: '도보', color: '#5f7f6e' }
-  if (distance <= 4) return { from, to, distanceKm: distance, minutes: Math.round(8 + distance * 4), mode: '버스·도보', color: '#ef8354' }
-  return { from, to, distanceKm: distance, minutes: Math.round(13 + distance * 3), mode: '지하철·버스', color: '#1769aa' }
+  if (distance <= 0.9) return { from, to, distanceKm: distance, minutes: Math.max(4, Math.round(distance * 13)), mode: 'walk', color: '#5f7f6e' }
+  if (distance <= 4) return { from, to, distanceKm: distance, minutes: Math.round(8 + distance * 4), mode: 'public-near', color: '#ef8354' }
+  return { from, to, distanceKm: distance, minutes: Math.round(13 + distance * 3), mode: 'public-far', color: '#1769aa' }
 }
 
 export function transitLegs(stops: Stop[]) {
@@ -84,7 +84,7 @@ export function sourceDisplay(source?: string, verifiedAt?: string, locale: Sour
 }
 
 export function naverRouteUrl(leg: TransitLeg) {
-  const action = leg.mode === '도보' ? 'walk' : 'public'
+  const action = leg.mode === 'walk' ? 'walk' : 'public'
   const start = `${leg.from.longitude},${leg.from.latitude},${encodeURIComponent(leg.from.title)},-`
   const destination = `${leg.to.longitude},${leg.to.latitude},${encodeURIComponent(leg.to.title)},-`
   return `https://map.naver.com/p/directions/${start}/${destination}/-/${action}`

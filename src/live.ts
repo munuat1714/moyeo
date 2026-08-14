@@ -25,15 +25,15 @@ export type LiveSnapshot = {
 const tokenKey = (roomId: string) => `moyeo-room-${roomId}-token`
 
 export function getRoomToken(roomId: string) {
-  return localStorage.getItem(tokenKey(roomId)) ?? ''
+  try { return localStorage.getItem(tokenKey(roomId)) ?? '' } catch { return '' }
 }
 
 export function saveRoomToken(roomId: string, token: string) {
-  localStorage.setItem(tokenKey(roomId), token)
+  try { localStorage.setItem(tokenKey(roomId), token) } catch { /* Joining still works for the current response. */ }
 }
 
 export function clearRoomToken(roomId: string) {
-  localStorage.removeItem(tokenKey(roomId))
+  try { localStorage.removeItem(tokenKey(roomId)) } catch { /* Storage is optional. */ }
 }
 
 async function request<T>(path: string, init: RequestInit = {}, roomId?: string): Promise<T> {

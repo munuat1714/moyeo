@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { mapModelRestaurantItem } from '../worker/public-data'
+import { evaluatePublicDataHealth, mapModelRestaurantItem } from '../worker/public-data'
+
+describe('public data health', () => {
+  it('marks data older than 72 hours unavailable even when its last sync status is ready', () => {
+    const now = 1_000_000
+    expect(evaluatePublicDataHealth([{ provider: 'TOUR_API', status: 'ready', item_count: 1, last_completed_at: now - 60 }], now).status).toBe('ok')
+    expect(evaluatePublicDataHealth([{ provider: 'TOUR_API', status: 'ready', item_count: 10, last_completed_at: now - 73 * 60 * 60 }], now))
+      .toMatchObject({ status: 'unavailable', overdue: ['TOUR_API'] })
+  })
+})
 
 describe('mapModelRestaurantItem', () => {
   it('공식 모범음식점 필드와 좌표를 추천 장소로 변환한다', () => {

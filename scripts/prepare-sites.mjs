@@ -1,4 +1,15 @@
-import { copyFile, mkdir, rename, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises'
+
+// Keep local design iterations in the workspace without shipping them with every production build.
+const socialDirectory = 'dist/client/social'
+const shippedSocialAssets = new Set(['moyeo-cover.png', 'moyeo-profile.png'])
+try {
+  for (const file of await readdir(socialDirectory)) {
+    if (!shippedSocialAssets.has(file)) await rm(`${socialDirectory}/${file}`, { force: true })
+  }
+} catch {
+  // The directory is optional.
+}
 
 await mkdir('dist/.openai', { recursive: true })
 await copyFile('.openai/hosting.json', 'dist/.openai/hosting.json')

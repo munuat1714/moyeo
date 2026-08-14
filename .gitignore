@@ -13,3 +13,10 @@ android/keystore.properties
 *.jks
 *.keystore
 *.aab
+*.apk
+*.zip
+*-qr.png
+output/
+public/social/*_prev.png
+public/social/moyeo-meta-*.png
+public/social/moyeo-selected-*.png

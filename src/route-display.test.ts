@@ -15,12 +15,12 @@ describe('route display', () => {
   })
 
   it('가까운 구간은 도보로 안내한다', () => {
-    expect(transitLeg(stop('A', 35.1577, 129.0630), stop('B', 35.1585, 129.0660))?.mode).toBe('도보')
+    expect(transitLeg(stop('A', 35.1577, 129.0630), stop('B', 35.1585, 129.0660))?.mode).toBe('walk')
   })
 
   it('먼 구간은 대중교통으로 안내한다', () => {
     const leg = transitLeg(stop('A', 35.1151, 129.0414), stop('B', 35.1532, 129.1187))!
-    expect(leg.mode).toBe('지하철·버스')
+    expect(leg.mode).toBe('public-far')
     expect(naverRouteUrl(leg)).toContain('https://map.naver.com/p/directions/')
     expect(naverRouteUrl(leg)).toContain('/public')
   })

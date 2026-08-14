@@ -232,7 +232,8 @@ async function markReady(db: D1Database, provider: string, count: number, now = 
 
 export async function syncPublicData(env: PublicDataEnv, requestedProviders?: string[]) {
   if (!env.PUBLIC_DATA_SERVICE_KEY) return { enabled: false, synced: [] }
-  const lockOwner = await acquireOperationLock(env.DB, 'public-data-sync', 15 * 60)
+  const lockName = requestedProviders?.length === 1 ? `public-data-sync:${requestedProviders[0]}` : 'public-data-sync'
+  const lockOwner = await acquireOperationLock(env.DB, lockName, 15 * 60)
   if (!lockOwner) return { enabled: true, synced: [], skipped: 'already_running' }
   const key = env.PUBLIC_DATA_SERVICE_KEY, synced: string[] = []
   const tasks: Array<{ id: string; run: () => Promise<void> }> = [
@@ -259,7 +260,7 @@ export async function syncPublicData(env: PublicDataEnv, requestedProviders?: st
     }
     return { enabled: true, synced }
   } finally {
-    await releaseOperationLock(env.DB, 'public-data-sync', lockOwner)
+    await releaseOperationLock(env.DB, lockName, lockOwner)
   }
 }
 
@@ -297,4 +298,29 @@ export async function publicDataStatus(db: D1Database) {
   return ACTIVE_PUBLIC_DATA_PROVIDERS.map((provider) => byProvider.get(provider) ?? {
     provider, status: 'pending', last_completed_at: null, item_count: 0, error_message: null,
   })
+}
+
+export type PublicDataHealth = {
+  status: 'ok' | 'degraded' | 'unavailable'
+  unavailable: string[]
+  stale: string[]
+  empty: string[]
+  overdue: string[]
+}
+
+export function evaluatePublicDataHealth(providers: any[], now = Math.floor(Date.now() / 1000)): PublicDataHealth {
+  const unavailable = providers.filter((item) => item.status === 'failed' && Number(item.item_count) === 0).map((item) => item.provider)
+  const stale = providers.filter((item) => item.status === 'stale').map((item) => item.provider)
+  const empty = providers.filter((item) => item.status === 'empty').map((item) => item.provider)
+  const overdue = providers
+    .filter((item) => item.provider !== 'TOUR_DETAIL' && (!item.last_completed_at || now - Number(item.last_completed_at) > 72 * 60 * 60))
+    .map((item) => item.provider)
+  const unavailableSet = [...new Set([...unavailable, ...overdue])]
+  return {
+    status: unavailableSet.length ? 'unavailable' : stale.length || empty.length ? 'degraded' : 'ok',
+    unavailable: unavailableSet,
+    stale,
+    empty,
+    overdue,
+  }
 }

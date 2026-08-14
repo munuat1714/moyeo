@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useLayoutEffect, useMemo, useState } from 'react'
+import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { Languages } from 'lucide-react'
 import { apiUrl } from './runtime'
 
@@ -8,6 +8,18 @@ export type Locale = 'ko' | 'en' | 'zh-TW' | 'zh-CN' | 'ja'
 
 const LANGUAGE_KEY = 'mohang-language-v1'
 const labels: Record<Locale, string> = { ko: '한국어', en: 'English', 'zh-TW': '繁體中文', 'zh-CN': '简体中文', ja: '日本語' }
+
+const loadedFonts = new Set<Locale>()
+function loadLocaleFont(locale: Locale) {
+  if (loadedFonts.has(locale)) return
+  loadedFonts.add(locale)
+  const request = locale === 'ko' ? import('pretendard/dist/web/variable/pretendardvariable.css')
+    : locale === 'ja' ? import('@fontsource-variable/noto-sans-jp/wght.css')
+      : locale === 'zh-TW' ? import('@fontsource-variable/noto-sans-tc/wght.css')
+        : locale === 'zh-CN' ? import('@fontsource-variable/noto-sans-sc/wght.css')
+          : import('@fontsource-variable/noto-sans/wght.css')
+  void request.catch(() => loadedFonts.delete(locale))
+}
 
 const copy: Record<Exclude<Locale, 'ko'>, Record<string, string>> = {
   en: {
@@ -45,6 +57,19 @@ type LocalizedCopy = [en: string, traditionalChinese: string, simplifiedChinese:
 // 화면 전환 뒤에 나타나는 문구와 오류 문구까지 한곳에서 보완합니다. 장소의 공식 상호명은
 // 검색 결과와 지도에서 대조할 수 있도록 원문을 유지하고, 서비스 UI 문구만 번역합니다.
 const supplemental: Record<string, LocalizedCopy> = {
+  '화면을 불러오지 못했어요': ['Could not load this screen', '無法載入此畫面', '无法加载此页面', '画面を読み込めませんでした'],
+  '작성한 내용은 이 기기에 남아 있습니다. 화면을 다시 불러와 주세요.': ['Your work remains on this device. Reload the screen to continue.', '已填寫的內容仍保留在此裝置。請重新載入畫面。', '已填写的内容仍保留在此设备。请重新加载页面。', '入力内容はこの端末に残っています。画面を再読み込みしてください。'],
+  '다시 불러오기': ['Reload', '重新載入', '重新加载', '再読み込み'],
+  '저장한 확정 경로와 진행 중인 여행방을 이 기기에서 확인해요. 앱을 삭제하거나 브라우저 데이터를 지우면 저장 일정도 삭제될 수 있어요.': [
+    'View saved routes and active trip rooms on this device. Saved trips may be removed if you uninstall the app or clear browser data.',
+    '在此裝置查看已儲存路線與進行中的旅程房間。若刪除應用程式或清除瀏覽器資料，已儲存行程也可能被刪除。',
+    '在此设备查看已保存路线和进行中的行程房间。如果卸载应用或清除浏览器数据，已保存行程也可能被删除。',
+    '保存済みルートと進行中の旅行ルームをこの端末で確認できます。アプリの削除やブラウザデータの消去により、保存日程も削除される場合があります。',
+  ],
+  '예상 도보': ['Estimated walking', '預計步行', '预计步行', '徒歩の目安'],
+  '예상 대중교통': ['Estimated public transit', '預計大眾運輸', '预计公共交通', '公共交通の目安'],
+  '직선거리 기준': ['Approx. direct distance', '約略直線距離', '约直线距离', '直線距離の目安'],
+  '네이버지도에서 확인': ['Check on Naver Map', '在 NAVER 地圖確認', '在 NAVER 地图确认', 'NAVERマップで確認'],
   '우리들의 부산 한바퀴': ['Our Busan Day Trip', '我們的釜山一日遊', '我们的釜山一日游', 'みんなの釜山一日旅'],
   '에서 이동이 짧은 실제 장소를 우선했어요.': [' prioritizes real places with shorter travel.', '優先選擇移動距離較短的實際地點。', '优先选择移动距离较短的实际地点。', 'から移動の短い実在スポットを優先しました。'],
   '에서': [' from ', '從', '从', 'から'],
@@ -372,6 +397,11 @@ const reverseEntries = Object.entries(translatedCopy)
   .filter(([translated, ko]) => translated.length > 1 && translated !== ko)
   .sort((a, b) => b[0].length - a[0].length)
 
+const reverseExact = new Map(reverseEntries)
+const sortedTargetEntries = Object.fromEntries((Object.keys(localeIndex) as Array<Exclude<Locale, 'ko'>>).map((locale) => [
+  locale, Object.entries(translatedCopy[locale]).sort((a, b) => b[0].length - a[0].length),
+])) as Record<Exclude<Locale, 'ko'>, Array<[string, string]>>
+
 const legacyReverseEntries = [['提供反饋', '의견 보내기'], ['提供反馈', '의견 보내기']] as const
 
 const presetNames = ['우리들의 부산 한바퀴', '민지', '서준', '유나', '현우'] as const
@@ -391,11 +421,16 @@ function detectLocale(): Locale {
 }
 
 export function translateCopy(source: string, locale: Locale) {
+  const exactCanonical = reverseExact.get(source) ?? legacyReverseEntries.find(([translated]) => translated === source)?.[1] ?? source
+  if (locale === 'ko' && exactCanonical !== source) return exactCanonical
+  if (locale !== 'ko') {
+    const exact = translatedCopy[locale][exactCanonical]
+    if (exact !== undefined) return exact
+  }
   const legacyCanonical = legacyReverseEntries.reduce((value, [translated, ko]) => value.split(translated).join(ko), source)
   const canonical = reverseEntries.reduce((value, [translated, ko]) => value.split(translated).join(ko), legacyCanonical)
   if (locale === 'ko') return canonical
-  const entries = Object.entries(translatedCopy[locale]).sort((a, b) => b[0].length - a[0].length)
-  return entries.reduce((value, [ko, target]) => value.split(ko).join(target), canonical)
+  return sortedTargetEntries[locale].reduce((value, [ko, target]) => value.includes(ko) ? value.split(ko).join(target) : value, canonical)
 }
 
 export function translatePresetName(source: string, locale: Locale) {
@@ -432,12 +467,25 @@ function translateTree(root: ParentNode, locale: Locale) {
 export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(() => {
     if (typeof window === 'undefined') return 'ko'
-    return (localStorage.getItem(LANGUAGE_KEY) as Locale | null) ?? detectLocale()
+    try { return (localStorage.getItem(LANGUAGE_KEY) as Locale | null) ?? detectLocale() } catch { return detectLocale() }
   })
-  const setLocale = (value: Locale) => { localStorage.setItem(LANGUAGE_KEY, value); setLocaleState(value) }
+  const setLocale = (value: Locale) => { try { localStorage.setItem(LANGUAGE_KEY, value) } catch { /* Language still changes for this session. */ } setLocaleState(value) }
+  useEffect(() => loadLocaleFont(locale), [locale])
   useLayoutEffect(() => {
     document.documentElement.lang = locale
     translateTree(document.body, locale)
+    const pending = new Set<ParentNode>()
+    let frame = 0
+    const queue = (root: ParentNode) => {
+      pending.add(root)
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        const roots = [...pending]
+        pending.clear()
+        roots.forEach((candidate) => translateTree(candidate, locale))
+      })
+    }
     const observer = new MutationObserver((mutations) => mutations.forEach((mutation) => {
       if (mutation.type === 'characterData') {
         const node = mutation.target as Text
@@ -446,10 +494,10 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
         const protectedBlock = parent?.closest('.trip-summary h2,.final-hero h2,.create-review article b,.saved-trip-summary b,.native-room-list b,.saved-trip-detail li b,.stop-title-row b,.mini-timeline b,.course-place-preview p,.map-stop span,.route-editor-results b,.route-editor-results span,[data-no-translate]')
         if (protectedValue || protectedBlock) return
         if (/[가-힣]/.test(node.nodeValue ?? '')) originalText.set(node, node.nodeValue ?? '')
-        if (node.parentElement) translateTree(node.parentElement, locale)
+        if (node.parentElement) queue(node.parentElement)
         return
       }
-      mutation.addedNodes.forEach((node) => { if (node.nodeType === Node.ELEMENT_NODE) translateTree(node as Element, locale); else if (node.nodeType === Node.TEXT_NODE && node.parentElement) translateTree(node.parentElement, locale) })
+      mutation.addedNodes.forEach((node) => { if (node.nodeType === Node.ELEMENT_NODE) queue(node as Element); else if (node.nodeType === Node.TEXT_NODE && node.parentElement) queue(node.parentElement) })
     }))
     observer.observe(document.body, { childList: true, characterData: true, subtree: true })
     const sessionKey = `mohang-usage:${locale}:${location.pathname.startsWith('/demo') ? 'demo' : location.pathname.startsWith('/app') ? 'service' : 'landing'}`
@@ -457,7 +505,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
       sessionStorage.setItem(sessionKey, '1')
       void fetch(apiUrl('/api/usage'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ locale, surface: location.pathname.startsWith('/demo') ? 'demo' : location.pathname.startsWith('/app') ? 'service' : 'landing' }) }).catch(() => sessionStorage.removeItem(sessionKey))
     }
-    return () => observer.disconnect()
+    return () => { observer.disconnect(); if (frame) cancelAnimationFrame(frame) }
   }, [locale])
   const value = useMemo(() => ({ locale, setLocale, t: (source: string) => translateCopy(source, locale) }), [locale])
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>

@@ -65,13 +65,14 @@ describe('internationalized interface copy', () => {
   })
 
   it('reports every Korean interface literal that still needs localization', () => {
-    const source = ts.createSourceFile('main.tsx', fs.readFileSync('src/main.tsx', 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
     const values = new Set<string>()
     const visit = (node: ts.Node) => {
       if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) && /[가-힣]/.test(node.text)) values.add(node.text.trim())
       ts.forEachChild(node, visit)
     }
-    visit(source)
+    for (const file of ['src/main.tsx', 'src/landing.tsx', 'src/error-boundary.tsx']) {
+      visit(ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX))
+    }
     for (const locale of ['en', 'zh-TW', 'zh-CN', 'ja'] as const) {
       const untranslated = [...values].filter((value) => /[가-힣]/.test(translateCopy(value, locale)))
       expect(untranslated, `untranslated ${locale} copy`).toEqual([])
