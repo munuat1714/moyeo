@@ -10,6 +10,8 @@ describe('route display', () => {
   it('TourAPI 수정시각을 사용자가 읽는 월로 표시한다', () => {
     expect(formatSourceDate('2025121909')).toEqual({ short: '2025년 12월 기준', detail: '2025년 12월 19일 9시 갱신' })
     expect(sourceDisplay('한국관광공사 TourAPI', '2025121909').text).toBe('한국관광공사 TourAPI · 2025년 12월 기준')
+    expect(sourceDisplay('한국관광공사·부산관광포털', '2026-07-31', 'en').text).toBe('Korea Tourism Organization · Visit Busan · As of July 2026')
+    expect(sourceDisplay('한국관광공사·부산관광포털', '2026-07-31', 'ja').text).toBe('韓国観光公社・釜山観光ポータル · 2026年7月時点')
   })
 
   it('가까운 구간은 도보로 안내한다', () => {

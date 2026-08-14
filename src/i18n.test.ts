@@ -39,6 +39,11 @@ describe('internationalized interface copy', () => {
     expect(translatePresetName('我的釜山旅行', 'en')).toBe('我的釜山旅行')
   })
 
+  it.each(['en', 'zh-TW', 'zh-CN', 'ja'] as const)('translates every recommendation hashtag to %s', (locale) => {
+    const tags = ['맛집', '감성 카페', '사진', '사진 명소', '산책', '액티비티', '체험', '역사·문화', '쇼핑', '한식', '고기·구이', '해산물', '일식', '중식', '양식', '분식', '디저트·베이커리', '채식']
+    for (const tag of tags) expect(translateCopy(tag, locale), `${locale}: ${tag}`).not.toMatch(/[가-힣]/)
+  })
+
   it.each(['en', 'zh-TW', 'zh-CN', 'ja'] as const)('fully translates late-screen interface copy to %s', (locale) => {
     const phrases = [
       '작성 중인 내용을 지우고 처음부터 다시 시작할까요?',
