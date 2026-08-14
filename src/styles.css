@@ -381,10 +381,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .travel-date-note { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .travel-date-limit { display: flex; align-items: center; gap: 5px; color: var(--green); font-size: 11px; font-weight: 600; }.travel-date-limit svg { flex: none; }.travel-date-limit b { font-weight: 800; }
 
-/* International, low-friction controls and feedback. */
-html:lang(ja) body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif; }
-html:lang(zh-TW) body { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif; }
-html:lang(zh-CN) body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+/* Language-specific members of one Noto family keep CJK glyphs consistent and regionally correct. */
+html:lang(ko) body { font-family: 'Pretendard', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; }
+html:lang(en) body { font-family: 'Noto Sans Variable', 'Noto Sans', sans-serif; }
+html:lang(ja) body { font-family: 'Noto Sans JP Variable', 'Noto Sans JP', sans-serif; line-height: 1.55; }
+html:lang(zh-TW) body { font-family: 'Noto Sans TC Variable', 'Noto Sans TC', sans-serif; line-height: 1.55; }
+html:lang(zh-CN) body { font-family: 'Noto Sans SC Variable', 'Noto Sans SC', sans-serif; line-height: 1.55; }
+html:lang(en) button, html:lang(ja) button, html:lang(zh-TW) button, html:lang(zh-CN) button { font-weight: 600; }
 .header-tools { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
 .language-select { min-height: 40px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--muted); }
 .language-select select { max-width: 104px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 11px; font-weight: 700; }
