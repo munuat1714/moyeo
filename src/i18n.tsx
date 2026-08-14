@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react'
-import { Languages } from 'lucide-react'
+import { ChevronDown, Languages } from 'lucide-react'
 import { apiUrl } from './runtime'
 
 export type Locale = 'ko' | 'en' | 'zh-TW' | 'zh-CN' | 'ja'
@@ -515,5 +515,5 @@ export const useI18n = () => useContext(I18nContext)
 
 export function LanguageSelect({ compact = false }: { compact?: boolean }) {
   const { locale, setLocale } = useI18n()
-  return <label className={`language-select ${compact ? 'compact' : ''}`}><Languages size={15} aria-hidden="true" /><span className="sr-only">Language</span><select value={locale} onChange={(event) => setLocale(event.target.value as Locale)} aria-label="언어 선택">{(Object.keys(labels) as Locale[]).map((value) => <option key={value} value={value}>{labels[value]}</option>)}</select></label>
+  return <label className={`language-select ${compact ? 'compact' : ''}`}><Languages className="control-leading-icon" size={16} aria-hidden="true" /><span className="sr-only">Language</span><select value={locale} onChange={(event) => setLocale(event.target.value as Locale)} aria-label="언어 선택">{(Object.keys(labels) as Locale[]).map((value) => <option key={value} value={value}>{labels[value]}</option>)}</select><ChevronDown className="control-chevron" size={15} aria-hidden="true" /></label>
 }
