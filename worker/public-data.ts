@@ -310,7 +310,7 @@ export type PublicDataHealth = {
 
 export function evaluatePublicDataHealth(providers: any[], now = Math.floor(Date.now() / 1000)): PublicDataHealth {
   const optionalEmptyProviders = new Set(['BUSAN_EXHIBITION'])
-  const unavailable = providers.filter((item) => item.status === 'failed' && Number(item.item_count) === 0).map((item) => item.provider)
+  const unavailable = providers.filter((item) => item.status === 'failed' && Number(item.item_count) === 0 && !optionalEmptyProviders.has(item.provider)).map((item) => item.provider)
   const stale = providers.filter((item) => item.status === 'stale').map((item) => item.provider)
   const empty = providers.filter((item) => item.status === 'empty').map((item) => item.provider)
   const overdue = providers
