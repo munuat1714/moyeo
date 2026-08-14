@@ -112,6 +112,10 @@ const supplemental: Record<string, LocalizedCopy> = {
   '여유 중심': ['Relaxed pace', '悠閒為主', '悠闲为主', 'ゆったり重視'],
   '보고 즐기는 활동 여행': ['An active sightseeing day', '邊看邊玩的體驗之旅', '边看边玩的体验之旅', '見て楽しむアクティブ旅'],
   '체험 중심': ['Experience focused', '體驗為主', '体验为主', '体験重視'],
+  '사진': ['Photo spot', '拍照景點', '拍照景点', '写真スポット'],
+  '체험': ['Activity', '體驗活動', '体验活动', '体験'],
+  '역사': ['History', '歷史', '历史', '歴史'],
+  '장소': ['Place', '地點', '地点', '場所'],
   '소권역 안에서': ['within a compact area', '在鄰近區域內', '在邻近区域内', '近隣エリア内で'],
   '대중교통 누적 이동을 줄인 당일치기 코스': ['a day route with less total public-transit travel', '減少大眾運輸累計移動時間的一日遊路線', '减少公共交通累计移动时间的一日游路线', '公共交通の合計移動時間を抑えた日帰りコース'],
   '참여하는 중…': ['Joining…', '正在加入…', '正在加入…', '参加中…'],
@@ -341,6 +345,15 @@ const translatedCopy = Object.fromEntries((Object.keys(localeIndex) as Array<Exc
   { ...copy[locale], ...Object.fromEntries(Object.entries({ ...generatedSupplemental, ...supplemental }).map(([ko, values]) => [ko, values[localeIndex[locale]]])) },
 ])) as Record<Exclude<Locale, 'ko'>, Record<string, string>>
 
+const reverseEntries = Object.entries(translatedCopy)
+  .flatMap(([, entries]) => Object.entries(entries).map(([ko, translated]) => [translated, ko] as const))
+  .filter(([translated, ko]) => translated.length > 1 && translated !== ko)
+  .sort((a, b) => b[0].length - a[0].length)
+
+const legacyReverseEntries = [['提供反饋', '의견 보내기'], ['提供反馈', '의견 보내기']] as const
+
+const presetNames = ['우리들의 부산 한바퀴', '민지', '서준', '유나', '현우'] as const
+
 const I18nContext = createContext<{ locale: Locale; setLocale: (locale: Locale) => void; t: (source: string) => string }>({ locale: 'ko', setLocale: () => undefined, t: (source) => source })
 const originalText = new WeakMap<Text, string>()
 const originalAttributes = new WeakMap<Element, Map<string, string>>()
@@ -356,9 +369,17 @@ function detectLocale(): Locale {
 }
 
 export function translateCopy(source: string, locale: Locale) {
-  if (locale === 'ko') return source
+  const legacyCanonical = legacyReverseEntries.reduce((value, [translated, ko]) => value.split(translated).join(ko), source)
+  const canonical = reverseEntries.reduce((value, [translated, ko]) => value.split(translated).join(ko), legacyCanonical)
+  if (locale === 'ko') return canonical
   const entries = Object.entries(translatedCopy[locale]).sort((a, b) => b[0].length - a[0].length)
-  return entries.reduce((value, [ko, target]) => value.split(ko).join(target), source)
+  return entries.reduce((value, [ko, target]) => value.split(ko).join(target), canonical)
+}
+
+export function translatePresetName(source: string, locale: Locale) {
+  const korean = presetNames.find((name) => name === source || (Object.keys(localeIndex) as Array<Exclude<Locale, 'ko'>>).some((candidate) => translatedCopy[candidate][name] === source))
+  if (!korean) return source
+  return locale === 'ko' ? korean : translatedCopy[locale][korean] ?? korean
 }
 
 function translateTree(root: ParentNode, locale: Locale) {

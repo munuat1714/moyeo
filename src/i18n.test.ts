@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import ts from 'typescript'
-import { translateCopy } from './i18n'
+import { translateCopy, translatePresetName } from './i18n'
 
 describe('internationalized interface copy', () => {
   it.each([
@@ -24,6 +24,19 @@ describe('internationalized interface copy', () => {
     ['ja', 'みんなの釜山一日旅'],
   ] as const)('localizes the untouched sample trip name to %s', (locale, expected) => {
     expect(translateCopy('우리들의 부산 한바퀴', locale)).toBe(expected)
+  })
+
+  it('switches already translated interface copy to the newly selected language', () => {
+    expect(translateCopy('提供反饋', 'en')).toBe('Send feedback')
+    expect(translateCopy('體驗為主', 'en')).toBe('Experience focused')
+    expect(translateCopy('美食', 'en')).toBe('Food')
+    expect(translateCopy('咖啡廳 · 拍照景點 · 體驗活動', 'en')).toBe('Café · Photo spot · Activity')
+  })
+
+  it('switches only known sample names and leaves custom names unchanged', () => {
+    expect(translatePresetName('我們的釜山一日遊', 'en')).toBe('Our Busan Day Trip')
+    expect(translatePresetName('敏吉', 'en')).toBe('Minji')
+    expect(translatePresetName('我的釜山旅行', 'en')).toBe('我的釜山旅行')
   })
 
   it.each(['en', 'zh-TW', 'zh-CN', 'ja'] as const)('fully translates late-screen interface copy to %s', (locale) => {
