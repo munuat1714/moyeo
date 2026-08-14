@@ -393,8 +393,8 @@ html:lang(en) button, html:lang(ja) button, html:lang(zh-TW) button, html:lang(z
 .language-select select { max-width: 104px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 11px; font-weight: 700; }
 .language-select.compact { min-height: 36px; padding-inline: 7px; }.language-select.compact select { max-width: 76px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
-.feedback-dock { width: 100%; display: flex; justify-content: flex-end; padding: 8px 18px calc(22px + env(safe-area-inset-bottom, 0px)); }
-.native-app-mode .feedback-dock { padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
+.feedback-dock { position: fixed; z-index: 14; right: max(16px, calc((100vw - 430px) / 2 + 16px)); bottom: calc(82px + env(safe-area-inset-bottom, 0px)); width: auto; padding: 0; }
+.native-app-mode .feedback-dock { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
 .feedback-launcher { min-height: 40px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid #cfd5dc; border-radius: 10px; color: var(--muted); background: #fff; font-size: 11px; font-weight: 750; }
 .feedback-launcher:hover { color: var(--green); border-color: var(--green); }
 .feedback-modal-backdrop { position: fixed; z-index: 80; inset: 0; display: grid; place-items: end center; padding: 18px; background: #11182766; }
@@ -408,6 +408,21 @@ html:lang(en) button, html:lang(ja) button, html:lang(zh-TW) button, html:lang(z
 .final-hero .eyebrow svg, .simple-hero .eyebrow svg { color: var(--green); }.single-day-label { display: flex; align-items: center; gap: 7px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid var(--line); background: #fff; }.single-day-label svg { color: var(--green); }.single-day-label b { font-size: 12px; }.single-day-label span { margin-left: auto; color: var(--muted); font-size: 10px; }
 
 @media (max-width: 430px) {
+  .page { padding: 14px 16px 112px; }
+  .trip-summary { padding: 16px; border-radius: 14px; }
+  .trip-summary h2 { margin: 9px 0 7px; font-size: 21px; }
+  .expiry-notice { margin-top: 8px; padding: 10px 12px; }
+  .live-section { margin: 18px 0; }
+  .live-course-list { gap: 12px; }
+  .course-card { padding: 14px; }
+  .course-hero h3 { font-size: 16px; }
+  .tag-row { margin: 10px 0; }
+  .course-stats { padding: 10px 0; }
+  .section-heading h2 { font-size: 23px; }
+  .section-heading p { font-size: 12px; line-height: 1.5; }
+  .feedback-dock { right: 14px; }
+  .feedback-launcher { width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; border-radius: 50%; box-shadow: 0 5px 18px rgba(25,31,40,.15); }
+  .feedback-launcher span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
   .simple-hero { min-height: calc(100svh - 64px); padding: 24px 20px 28px; }
   .landing-brand { margin-bottom: 12px; }.landing-brand img { width: 40px; height: 40px; border-radius: 12px; }.landing-brand b { font-size: 19px; }
   .simple-hero h1 { margin: 12px 0; font-size: 36px; line-height: 1.1; letter-spacing: -2.5px; }
@@ -420,6 +435,17 @@ html:lang(en) button, html:lang(ja) button, html:lang(zh-TW) button, html:lang(z
   .landing-entry-actions { margin-top: 18px; }
   .final-hero h2 { font-size: 27px; line-height: 1.25; }
   .route-map { height: 340px; }
+}
+
+@media (min-width: 900px) {
+  .live-room-shell { width: min(calc(100% - 48px), 960px); }
+  .live-room-shell .page { padding: 28px 32px 112px; }
+  .live-room-shell .live-course-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  .live-room-shell .live-course-list > div { min-width: 0; }
+  .live-room-shell .course-card { height: 100%; padding: 16px; }
+  .live-room-shell .course-hero { grid-template-columns: 1fr; }
+  .live-room-shell .match-score { display: flex; align-items: baseline; gap: 6px; text-align: left; }
+  .live-room-shell .feedback-dock { right: max(16px, calc((100vw - 960px) / 2 + 16px)); }
 }
 
 @media (max-width: 600px) and (max-height: 620px) {

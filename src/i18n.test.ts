@@ -35,6 +35,8 @@ describe('internationalized interface copy', () => {
       '좋아하는 음식 · 복수 선택',
       '대중교통 이동이 짧은 부산 권역을 찾고 있어요',
       '전송하지 못했어요. 잠시 후 다시 시도해 주세요.',
+      '광안리·수영 천천히 머무는 동네 여행',
+      '광안리·수영 소권역 안에서 대중교통 누적 이동을 줄인 당일치기 코스',
     ]
     for (const phrase of phrases) expect(translateCopy(phrase, locale)).not.toMatch(/[가-힣]/)
   })
