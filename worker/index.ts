@@ -247,7 +247,7 @@ export default {
     if (url.pathname === "/api/health" && request.method === "GET") {
       const providers = await publicDataStatus(env.DB) as any[];
       const health = evaluatePublicDataHealth(providers);
-      return secured(Response.json({ status: 'ok', dataStatus: health.status, ...health }, {
+      return secured(Response.json({ ...health, status: 'ok', dataStatus: health.status }, {
         status: 200, headers: { 'Cache-Control': 'no-store' },
       }));
     }
