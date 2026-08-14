@@ -18,6 +18,8 @@ describe('internationalized interface copy', () => {
   it.each(['en', 'zh-TW', 'zh-CN', 'ja'] as const)('fully translates late-screen interface copy to %s', (locale) => {
     const phrases = [
       '작성 중인 내용을 지우고 처음부터 다시 시작할까요?',
+      '방식',
+      '코스 추천 방식',
       '여행방을 불러오지 못했습니다.',
       '좋아하는 음식 · 복수 선택',
       '대중교통 이동이 짧은 부산 권역을 찾고 있어요',

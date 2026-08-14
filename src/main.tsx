@@ -228,7 +228,7 @@ function QuickFeedback({ screen }: { screen: AppState['step'] }) {
     ? [['taste', '취향에 맞아요'], ['route', '동선이 좋아요'], ['places', '장소가 좋아요']]
     : [['distance', '거리가 멀어요'], ['taste', '취향과 달라요'], ['wrong_place', '장소 정보가 틀려요'], ['route', '이동이 불편해요'], ['other', '기타']]
   return <>
-    <button className="feedback-launcher" aria-label={t('의견 보내기')} title={t('의견 보내기')} onClick={() => setOpen(true)}><MessageCircle size={19} /><span className="sr-only">{t('의견 보내기')}</span></button>
+    <div className="feedback-dock"><button className="feedback-launcher" aria-label={t('의견 보내기')} onClick={() => setOpen(true)}><MessageCircle size={18} /><span>{t('의견 보내기')}</span></button></div>
     {open && <div className="feedback-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close() }}><section className="feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
       <button className="feedback-modal-close" aria-label={t('닫기')} onClick={close}><X size={19} /></button>
       <small>MOHANG FEEDBACK</small><h2 id="feedback-title">{t('이 화면은 어떠셨나요?')}</h2>

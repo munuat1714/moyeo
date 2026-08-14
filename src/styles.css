@@ -390,7 +390,9 @@ html:lang(zh-CN) body { font-family: -apple-system, BlinkMacSystemFont, "PingFan
 .language-select select { max-width: 104px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 11px; font-weight: 700; }
 .language-select.compact { min-height: 36px; padding-inline: 7px; }.language-select.compact select { max-width: 76px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
-.feedback-launcher { position: fixed; z-index: 28; right: max(10px, calc((100vw - 430px) / 2 + 10px)); top: calc(env(safe-area-inset-top, 0px) + 66px); width: 42px; height: 42px; display: grid; place-items: center; padding: 0; border: 1px solid #cfd5dc; border-radius: 50%; color: var(--ink); background: #fff; box-shadow: 0 4px 14px #19202a17; }
+.feedback-dock { width: 100%; display: flex; justify-content: flex-end; padding: 8px 18px calc(22px + env(safe-area-inset-bottom, 0px)); }
+.native-app-mode .feedback-dock { padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
+.feedback-launcher { min-height: 40px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid #cfd5dc; border-radius: 10px; color: var(--muted); background: #fff; font-size: 11px; font-weight: 750; }
 .feedback-launcher:hover { color: var(--green); border-color: var(--green); }
 .feedback-modal-backdrop { position: fixed; z-index: 80; inset: 0; display: grid; place-items: end center; padding: 18px; background: #11182766; }
 .feedback-modal { position: relative; width: min(100%, 410px); max-height: calc(100svh - 36px); overflow: auto; padding: 25px 20px 20px; border-radius: 16px; background: #fff; box-shadow: 0 22px 70px #0004; }
