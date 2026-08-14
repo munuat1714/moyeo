@@ -44,6 +44,11 @@ describe('internationalized interface copy', () => {
     for (const tag of tags) expect(translateCopy(tag, locale), `${locale}: ${tag}`).not.toMatch(/[가-힣]/)
   })
 
+  it.each(['en', 'zh-TW', 'zh-CN', 'ja'] as const)('translates every known place category before its Korean address to %s', (locale) => {
+    const categories = ['문화공간', '복합문화공간', '문화유적', '관광명소', '공연·축제', '전시', '전시관', '박물관', '미술관', '기념관', '도서관', '테마파크', '해수욕장', '전망대', '사찰', '시장', '거리', '공원', '식당', '자연', '레저', '스포츠']
+    for (const category of categories) expect(translateCopy(category, locale), `${locale}: ${category}`).not.toMatch(/[가-힣]/)
+  })
+
   it.each(['en', 'zh-TW', 'zh-CN', 'ja'] as const)('fully translates late-screen interface copy to %s', (locale) => {
     const phrases = [
       '작성 중인 내용을 지우고 처음부터 다시 시작할까요?',
