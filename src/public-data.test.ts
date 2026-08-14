@@ -8,6 +8,7 @@ describe('public data health', () => {
     expect(evaluatePublicDataHealth([{ provider: 'TOUR_API', status: 'ready', item_count: 10, last_completed_at: now - 73 * 60 * 60 }], now))
       .toMatchObject({ status: 'degraded', unavailable: [], overdue: ['TOUR_API'] })
     expect(evaluatePublicDataHealth([{ provider: 'KMA_FORECAST', status: 'failed', item_count: 0, last_completed_at: null }], now).status).toBe('unavailable')
+    expect(evaluatePublicDataHealth([{ provider: 'BUSAN_EXHIBITION', status: 'ready', item_count: 0, last_completed_at: now - 73 * 60 * 60 }], now).status).toBe('degraded')
   })
 })
 

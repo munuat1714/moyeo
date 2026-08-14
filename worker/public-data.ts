@@ -309,6 +309,7 @@ export type PublicDataHealth = {
 }
 
 export function evaluatePublicDataHealth(providers: any[], now = Math.floor(Date.now() / 1000)): PublicDataHealth {
+  const optionalEmptyProviders = new Set(['BUSAN_EXHIBITION'])
   const unavailable = providers.filter((item) => item.status === 'failed' && Number(item.item_count) === 0).map((item) => item.provider)
   const stale = providers.filter((item) => item.status === 'stale').map((item) => item.provider)
   const empty = providers.filter((item) => item.status === 'empty').map((item) => item.provider)
@@ -316,7 +317,7 @@ export function evaluatePublicDataHealth(providers: any[], now = Math.floor(Date
     .filter((item) => item.provider !== 'TOUR_DETAIL' && (!item.last_completed_at || now - Number(item.last_completed_at) > 72 * 60 * 60))
     .map((item) => item.provider)
   const overdueWithoutFallback = providers
-    .filter((item) => overdue.includes(item.provider) && Number(item.item_count) === 0)
+    .filter((item) => overdue.includes(item.provider) && Number(item.item_count) === 0 && !optionalEmptyProviders.has(item.provider))
     .map((item) => item.provider)
   const unavailableSet = [...new Set([...unavailable, ...overdueWithoutFallback])]
   return {
