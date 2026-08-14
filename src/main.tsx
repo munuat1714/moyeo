@@ -245,6 +245,7 @@ const stepTitle: Record<AppState['step'], string> = {
 }
 
 function LiveRoomApp({ roomId, appMode = false, nativeMode = false, basePath = '/demo' }: { roomId: string; appMode?: boolean; nativeMode?: boolean; basePath?: string }) {
+  const { locale } = useI18n()
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -522,7 +523,12 @@ function LiveRoomApp({ roomId, appMode = false, nativeMode = false, basePath = '
   if (loading) return <div className="app-shell"><main className="live-state"><Clock3 /><b>여행방을 불러오는 중이에요</b></main></div>
   if (!snapshot) return <div className="app-shell"><main className="live-state"><Clock3 /><h2>여행방을 열 수 없어요</h2><p>{error}</p><a className="primary-button" href={basePath}>새 여행방 만들기</a></main></div>
 
-  const expires = new Date(snapshot.room.expiresAt * 1000).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const expires = new Intl.DateTimeFormat(locale, { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }).format(new Date(snapshot.room.expiresAt * 1000))
+  const expiryMessage = locale === 'ko' ? `${expires}까지 이용할 수 있으며 이후 자동 삭제됩니다.`
+    : locale === 'en' ? `Available until ${expires}. It will be deleted automatically afterward.`
+    : locale === 'zh-TW' ? `可使用至 ${expires}，之後將自動刪除。`
+    : locale === 'zh-CN' ? `可使用至 ${expires}，之后将自动删除。`
+    : `${expires}まで利用可能で、その後自動削除されます。`
   const voteCounts = Object.values(snapshot.votes).reduce<Record<string, number>>((counts, id) => ({ ...counts, [id]: (counts[id] ?? 0) + 1 }), {})
   const roomControls = <section className="room-action-icons" aria-label="여행방 관리">
     <button type="button" onClick={copyInvite} aria-label={copied ? '초대 링크 복사 완료' : '친구 초대 링크 복사'}>{copied ? <Check size={19} /> : <Copy size={19} />}<span>{copied ? '복사 완료' : '초대'}</span></button>
@@ -534,7 +540,7 @@ function LiveRoomApp({ roomId, appMode = false, nativeMode = false, basePath = '
     <header className="app-header"><a className="icon-button" href={basePath} aria-label={appMode ? '앱 홈' : '데모 홈'}><Home size={18} /></a><div className="header-title">{appMode ? '여행방' : '실시간 여행방'}</div><div className="header-tools"><span className="live-code" title="여행방 코드">{roomId}</span><LanguageSelect compact /></div></header>
     <main className="page">
       <div className="trip-summary live-trip"><span className="eyebrow dark"><CalendarDays size={14} /> {snapshot.room.startDate}</span><h2>{snapshot.room.name}</h2><div className="trip-meta"><span>{snapshot.room.routeMode === 'open' ? <><TrainFront size={15} /> {snapshot.room.preferredArea === '상관없음' ? '부산 소권역 추천' : snapshot.room.preferredArea}</> : <><MapPin size={15} /> {snapshot.room.origin} → {snapshot.room.destination}</>}</span><span><UsersRound size={15} /> {snapshot.members.length}/{snapshot.room.expectedMembers}명</span></div></div>
-      <div className="expiry-notice"><Clock3 size={16} /><span><b>{expires}</b>까지 이용할 수 있으며 이후 자동 삭제됩니다.</span></div>
+      <div className="expiry-notice"><Clock3 size={16} /><span data-no-translate>{expiryMessage}</span></div>
       {error && <div className="form-error" role="alert">{error}</div>}
 
       {!snapshot.requesterMemberId ? <section className="live-card join-card"><span className="result-icon"><UsersRound /></span><h2>친구들과 여행을 준비해요</h2><p>연락처 없이 별명만 입력하면 참여할 수 있어요.</p><div className="join-privacy-note"><ShieldCheck size={15} /><span>초대 링크를 아는 사람에게 별명과 참여 상태가 보입니다. 링크를 공개 게시물에 공유하지 마세요.</span></div><label>내 별명<input maxLength={20} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void join()} placeholder="예: 민지" /></label><button className="primary-button" disabled={!name.trim() || joining} onClick={join}>{joining ? '참여하는 중…' : '여행방 참여하기'} <ArrowRight size={18} /></button></section> : <>
@@ -611,9 +617,10 @@ function SavedTripList({ trips, onDelete }: { trips: SavedTrip[]; onDelete: (id:
 }
 
 function RecentRoomList({ rooms, loading, onOpen, compact = false }: { rooms: RecentRoom[]; loading: boolean; onOpen: (id: string) => void; compact?: boolean }) {
+  const { locale, t } = useI18n()
   if (loading) return <div className="native-room-empty"><Clock3 size={20} /><span>여행방을 확인하고 있어요.</span></div>
   if (!rooms.length) return <div className="native-room-empty"><Map size={22} /><b>아직 저장된 여행이 없어요</b><span>여행방을 만들거나 초대 코드로 참여해 보세요.</span></div>
-  return <div className={`native-room-list ${compact ? 'compact' : ''}`}>{rooms.map((room) => <button key={room.id} onClick={() => onOpen(room.id)}><span className="native-room-date"><CalendarDays size={15} />{room.startDate.slice(5).replace('-', '.')}</span><span><b>{room.name}</b><small>방 코드 {room.id} · {new Date(room.expiresAt * 1000).toLocaleDateString('ko-KR')} 삭제</small></span><ChevronRight size={19} /></button>)}</div>
+  return <div className={`native-room-list ${compact ? 'compact' : ''}`}>{rooms.map((room) => { const deletionDate = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Seoul' }).format(new Date(room.expiresAt * 1000)); return <button key={room.id} onClick={() => onOpen(room.id)}><span className="native-room-date"><CalendarDays size={15} />{room.startDate.slice(5).replace('-', '.')}</span><span><b>{room.name}</b><small><span>{t('방 코드')}</span> {room.id} · <span data-no-translate>{deletionDate}</span> <span>{t('삭제')}</span></small></span><ChevronRight size={19} /></button> })}</div>
 }
 
 function HomeScreen() {
@@ -670,7 +677,7 @@ function CreateTrip({ state, setState, stage, setStage, appMode = false, nativeM
     date.setUTCDate(date.getUTCDate() + maxTravelPlanDays)
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
   })()
-  const maxTravelDateLabel = new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${maxTravelDate}T00:00:00Z`))
+  const maxTravelDateLabel = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${maxTravelDate}T00:00:00Z`))
   const validDate = state.trip.startDate >= today && state.trip.startDate <= maxTravelDate
   const stageLabels = ['코스 추천 방식', openRoute ? '선호 권역' : '여행 경로', '여행방 정보', '입력 내용 확인']
   const canContinue = stage === 1
@@ -742,7 +749,7 @@ function CreateTrip({ state, setState, stage, setStage, appMode = false, nativeM
         <div className="section-heading"><h2>여행방 정보를 알려주세요</h2><p>친구들이 알아보기 쉬운 이름과 여행 날짜를 정해 주세요.</p></div>
         <div className="form-card">
           <label>여행방 이름<input value={state.trip.name} onChange={(event) => { tripNameEdited.current = true; setTrip('name', event.target.value) }} placeholder="예: 우리들의 부산 여행" /></label>
-          <label className="travel-date-label">여행 날짜<input className="travel-date-input" type="date" min={today} max={maxTravelDate} value={state.trip.startDate} onChange={(event) => { setTrip('startDate', event.target.value); setTrip('endDate', event.target.value) }} /><span className="travel-date-limit"><CalendarDays size={14} /> 최대 계획 가능 날짜 <b>{maxTravelDateLabel}</b></span><small className="travel-date-note">오늘부터 365일 뒤까지 계획할 수 있어요. 여행방은 생성 후 7일 뒤 삭제되므로 확정 경로는 마이페이지에 저장해 주세요. 단기예보가 없는 날짜는 날씨를 추천 기준에서 제외해요.</small></label>
+          <label className="travel-date-label">여행 날짜<input className="travel-date-input" type="date" min={today} max={maxTravelDate} value={state.trip.startDate} onChange={(event) => { setTrip('startDate', event.target.value); setTrip('endDate', event.target.value) }} /><span className="travel-date-limit"><CalendarDays size={14} /> 최대 계획 가능 날짜 <b data-no-translate>{maxTravelDateLabel}</b></span><small className="travel-date-note">오늘부터 365일 뒤까지 계획할 수 있어요. 여행방은 생성 후 7일 뒤 삭제되므로 확정 경로는 마이페이지에 저장해 주세요. 단기예보가 없는 날짜는 날씨를 추천 기준에서 제외해요.</small></label>
           <label>내 별명<input maxLength={20} value={hostName} onChange={(event) => { hostNameEdited.current = true; setHostName(event.target.value) }} placeholder="예: 민지" /></label>
           <label>함께 갈 인원
             <div className="segmented member-count">{[1, 2, 3, 4, 5, 6].map((count) => <button type="button" className={expectedMembers === count ? 'active' : ''} onClick={() => setExpectedMembers(count)} key={count}>{count}명</button>)}</div>
