@@ -315,9 +315,12 @@ export function evaluatePublicDataHealth(providers: any[], now = Math.floor(Date
   const overdue = providers
     .filter((item) => item.provider !== 'TOUR_DETAIL' && (!item.last_completed_at || now - Number(item.last_completed_at) > 72 * 60 * 60))
     .map((item) => item.provider)
-  const unavailableSet = [...new Set([...unavailable, ...overdue])]
+  const overdueWithoutFallback = providers
+    .filter((item) => overdue.includes(item.provider) && Number(item.item_count) === 0)
+    .map((item) => item.provider)
+  const unavailableSet = [...new Set([...unavailable, ...overdueWithoutFallback])]
   return {
-    status: unavailableSet.length ? 'unavailable' : stale.length || empty.length ? 'degraded' : 'ok',
+    status: unavailableSet.length ? 'unavailable' : stale.length || empty.length || overdue.length ? 'degraded' : 'ok',
     unavailable: unavailableSet,
     stale,
     empty,
