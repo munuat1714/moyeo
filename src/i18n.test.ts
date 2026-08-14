@@ -54,4 +54,12 @@ describe('internationalized interface copy', () => {
       expect(untranslated, `untranslated ${locale} copy`).toEqual([])
     }
   })
+
+  it('localizes dynamic course copy while preserving search addresses', () => {
+    const source = fs.readFileSync('src/main.tsx', 'utf8')
+    expect(source).toContain('{t(finalCourse.title)}')
+    expect(source).toContain("t(openRoute ? '부산 코스부터 추천' : '출발·도착 직접 설정')")
+    expect(source).toContain('<span data-no-translate>{parts[1]}</span>')
+    expect(source).toContain('<small data-no-translate>{result.title}')
+  })
 })
